@@ -1,9 +1,16 @@
-# Configuration for SWE-agent with image viewing capabilities
-# This extends the default config with image parsing history processor
-# and the image_tools bundle for viewing images as base64-encoded markdown.
+# Formerly called: anthropic_filemap.yaml
+# This template is heavily inspired by anthropic's computer use demo, but you can use
+# it with any LM.
 agent:
+  model:
+    name: 'claude-sonnet-4-5-20250929'
+    per_instance_cost_limit: 0
+    total_cost_limit: 0
+    per_instance_call_limit: 120
+    max_input_tokens: 0
+    temperature: 0.0
+    top_p: 1.0
   templates:
-    disable_image_processing: false
     system_template: |-
       You are a helpful assistant that can interact with a computer to solve tasks.
     instance_template: |-
@@ -19,35 +26,23 @@ agent:
       Can you help me implement the necessary changes to the repository so that the requirements specified in the <pr_description> are met?
       I've already taken care of all changes to any of the test files described in the <pr_description>. This means you DON'T have to modify the testing logic or any of the tests in any way!
       Your task is to make the minimal changes to non-tests files in the {{working_dir}} directory to ensure the <pr_description> is satisfied.
-      Follow these steps to resolve the issue:
-      1. As a first step, it might be a good idea to find and read code relevant to the <pr_description>
-      2. Create a script to reproduce the error and execute it with `python <filename.py>` using the bash tool, to confirm the error
-      3. Edit the sourcecode of the repo to resolve the issue
-      4. Rerun your reproduce script and confirm that the error is fixed!
-      5. Think about edgecases and make sure your fix handles them as well
       Your thinking should be thorough and so it's fine if it's very long.
-
-      Note: You can use the view_image command to display images as embedded base64 data when relevant.
-      You'll also be given access browser tools to interact with the web or a local server.
-      In the browser, your mouse is shown as a red crosshair.
-
-      If you need to start a command that has long-running output (e.g. a web server), you should _always_ use the following pattern:
-      server_command &> my_server_log.txt &
-
-      This way you can see the server's output in the my_server_log.txt file and it will not block the rest of your work.
     next_step_template: |-
       OBSERVATION:
       {{observation}}
     next_step_no_output_template: |-
       Your command ran successfully and did not produce any output.
-    max_observation_length: 10_000_000  # need longer for images
   tools:
-    execution_timeout: 300  # need longer for builds
+    env_variables:
+      PAGER: cat
+      MANPAGER: cat
+      LESS: -R
+      PIP_PROGRESS_BAR: 'off'
+      TQDM_DISABLE: '1'
+      GIT_PAGER: cat
     bundles:
       - path: tools/registry
       - path: tools/edit_anthropic
-      - path: tools/image_tools  # lets models view image files
-      - path: tools/web_browser  # browser tool for interacting with web servers
       - path: tools/review_on_submit_m
     registry_variables:
       USE_FILEMAP: 'true'
@@ -70,14 +65,13 @@ agent:
           </diff>
     enable_bash_tool: true
     parse_function:
-      type: function_calling
+      type: function_calling # thought_action
   history_processors:
-    - type: image_parsing  # parses base64 encoded images in the observation
-    # - type: cache_control  # enable for claude
-    #   last_n_messages: 2  # enable for claude
-instances:
-  type: swe_bench
-  subset: multimodal
-  split: dev
-  shuffle: true
-  # filter: processing__p5.js-6069
+    - type: cache_control
+      last_n_messages: 2
+  ablation:
+    - reproduction: false
+    - regression: false
+    - location: false
+    - context: true
+    - api: false

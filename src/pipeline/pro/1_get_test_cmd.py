@@ -32,7 +32,7 @@ def proc_instance(d):
     del d["fail_to_pass"], d["pass_to_pass"]
     d["test_cmd"] =  "bash test_script.sh  " + "  ".join([f'"{i}"' for i in eval(d["selected_test_files_to_run"])])
     res = container.send_command(d["test_cmd"])
-    if int(res.metadata.exit_code) != 0 and set(parse_log(instance_id, res.output)) & set(d["PASS_TO_PASS"]) != set(d["PASS_TO_PASS"]):
+    if int(res.metadata.exit_code) != 0 and (set(parse_log(instance_id, res.output)) & set(d["PASS_TO_PASS"])) != set(d["PASS_TO_PASS"]):
         os.makedirs(f"data/pro/{lang}/error", exist_ok=True)
         with open(f"data/pro/{lang}/error/{d['instance_id']}.txt", "w") as f:
             print(res.output, file=f)
@@ -46,7 +46,7 @@ def proc_instance(d):
         d["f2p_cmd"] = "bash test_script.sh  " + "  ".join([f'"{i}"' for i in d["f2p_parsed"]])
         res = container.send_command(d["f2p_cmd"])
     container.cleanup()
-    if int(res.metadata.exit_code) == 0 or set(parse_log(instance_id, res.output)) & set(d["FAIL_TO_PASS"]) == set(d["FAIL_TO_PASS"]):
+    if int(res.metadata.exit_code) == 0 or (set(parse_log(instance_id, res.output)) & set(d["FAIL_TO_PASS"])) == set(d["FAIL_TO_PASS"]):
         return d
     if ("fatal IO error" in res.output) and ("FAILED" not in res.output):
         return d
@@ -95,8 +95,8 @@ def main(lang):
 
 
 if __name__ == "__main__":
-    for lang in ["pyt", 
-                 #"go", 
-                 #"node",
+    for lang in [#"pyt", 
+                 "go", 
+                 "node",
                  ]:
         main(lang)

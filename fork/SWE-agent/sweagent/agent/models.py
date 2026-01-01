@@ -718,19 +718,32 @@ class LiteLLMModel(AbstractModel):
         if self.lm_provider == "anthropic":
             completion_kwargs["max_tokens"] = self.model_max_output_tokens
         try:
-            response: litellm.types.utils.ModelResponse = litellm.completion(  # type: ignore
-                model = f"azure/{self.config.name}",
-                messages = messages,
-                # temperature = self.config.temperature,
-                # top_p = self.config.top_p,
-                api_base = "https://cloudgpt-openai.azure-api.net/",
-                api_version = "2025-04-01-preview",
-                azure_ad_token_provider = self.token_provider,
-                fallbacks = self.config.fallbacks,
-                n = n,
-                **completion_kwargs,    # <- you removed this
-                **extra_args 
-            )
+            if "claude" in self.config.name:
+                response: litellm.types.utils.ModelResponse = litellm.completion(  # type: ignore
+                    model = self.config.name,
+                    messages = messages,
+                    # temperature = self.config.temperature,
+                    # top_p = self.config.top_p,
+                    api_key = os.environ.get("ANTHROPIC_API_KEY", ""),
+                    fallbacks = self.config.fallbacks,
+                    n = n,
+                    **completion_kwargs,    # <- you removed this
+                    **extra_args 
+                )
+            else:
+                response: litellm.types.utils.ModelResponse = litellm.completion(  # type: ignore
+                    model = f"azure/{self.config.name}",
+                    messages = messages,
+                    # temperature = self.config.temperature,
+                    # top_p = self.config.top_p,
+                    api_base = "https://cloudgpt-openai.azure-api.net/",
+                    api_version = "2025-04-01-preview",
+                    azure_ad_token_provider = self.token_provider,
+                    fallbacks = self.config.fallbacks,
+                    n = n,
+                    **completion_kwargs,    # <- you removed this
+                    **extra_args 
+                )
         except litellm.exceptions.ContextWindowExceededError as e:
             raise ContextWindowExceededError from e
         except litellm.exceptions.ContentPolicyViolationError as e:

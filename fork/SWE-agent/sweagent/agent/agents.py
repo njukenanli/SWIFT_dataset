@@ -585,7 +585,7 @@ class DefaultAgent(AbstractAgent):
                 timeout=self.tools.config.execution_timeout,
                 check="raise",
             )
-        if self.ablation.get("location", False) and (not self.ablation.get("context", False)):
+        if self.ablation.get("location", False):
             message = "Your colleague has found all the locations that should be edited to resolve the issue:\n"
             for k, v in gt["location_content"].items():
                 message += f"\n===========================\n# {k.strip()}:\n{v}\n"
@@ -697,11 +697,47 @@ class DefaultAgent(AbstractAgent):
             self.logger.info(f"\n<<<<<<GT\n{message}\n>>>>>>\n")
             self._append_history(history_item)
         
+        if self.ablation.get("context", False) and gt["error_context"]:
+            message = "Hints: Your colleague has provided the error stack traces from running reproduction testcaces related to this problem.\n"
+            message += "Each layer of trace is in the format of (file path, line number, function name, source code).\n"
+            message += json.dumps(gt["error_context"], indent=True) + "\n"
+            message += "The error stack traces can be some hints to help you locate the locations to be edited, and understand the code contexts which affect the locations to be edited or your edits would affect.\n"
+            history_item: dict[str, Any] = {
+                "role": "user",
+                "content": message,
+                "agent": self.name,
+                "message_type": "observation",
+            }
+            self.logger.info(f"\n<<<<<<GT\n{message}\n>>>>>>\n")
+            self._append_history(history_item)
+
+        if self.ablation.get("api", False) and gt["api"]:
+            message = "Hints: Your colleague has listed the functions you need to use to edit the source code.\n"
+            message += 'The function information format is a mapping: Dict [ "the path of the file you need to edit" : List [ "the information of each function you need to use to edit this file" ] ] \n'
+            message += json.dumps(gt["api"], indent=True) + "\n"
+            message += 'You need to use ALL of the function calls listed above. You need to use the exactly same arguments in the "api function should be called in this way" field in each piece of function information to use each function.\n'
+            message += "You can go to find the function definition of these functions you need to use to understand these functions better. Some of the function information has best-guess function definition from our development tools, but may not be accurate, so you need to judge and find the correct function definition yourself.\n"
+            history_item: dict[str, Any] = {
+                "role": "user",
+                "content": message,
+                "agent": self.name,
+                "message_type": "observation",
+            }
+            self.logger.info(f"\n<<<<<<GT\n{message}\n>>>>>>\n")
+            self._append_history(history_item)
+
         user_requirement = None
-        if self.ablation.get("reproduction", False) and self.ablation.get("regression", False) and self.ablation.get("location", False) and (not self.ablation.get("context", False)):
+        if self.ablation.get("reproduction", False) and self.ablation.get("regression", False) and self.ablation.get("location", False):
             user_requirement = ("Following your colleagues' contributions, your next steps should be:\n"
                        "1) Explore the source codes if you want to understand the contexts of the buggy locations or testcases better. But remember that all the locations that need to edited have been listed above.\n"
                        "2) Edit all the locations specified by your colleagues to resolve the issue.\n"
+                       "3) Run reproduction and regression tests to validate your fix. If any of the testcases required above fails, go back to explore and edit again.\n"
+                       "4) If you pass both reproduction and regression tests, submit.\n"
+                    )
+        elif self.ablation.get("reproduction", False) and self.ablation.get("regression", False):
+            user_requirement = ("Following your colleagues' contributions, your next steps should be:\n"
+                       "1) As a first step, it might be a good idea to find and read code relevant to the <pr_description>. \n"
+                       "2) Edit the codes to resolve the issue.\n"
                        "3) Run reproduction and regression tests to validate your fix. If any of the testcases required above fails, go back to explore and edit again.\n"
                        "4) If you pass both reproduction and regression tests, submit.\n"
                     )

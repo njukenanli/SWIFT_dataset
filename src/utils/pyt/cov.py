@@ -191,7 +191,7 @@ except:
         trace_cmd = self._build_trace_command(command)
 
         # 1) Run traced command to write coverage_file
-        out = self.container.send_command(trace_cmd).output
+        out = self.container.send_command(trace_cmd, timeout=10*60).output
         # print(out, flush=True)
 
         # 2) Read coverage_file

@@ -604,10 +604,14 @@ class DefaultAgent(AbstractAgent):
             self._append_history(history_item)
             self.logger.info(f"\n<<<<<<GT\n{message}\n>>>>>>\n")
         if self.ablation.get("reproduction", False):
+            if gt.get("before_repo_set_cmd", ""):
+                test_patch_cmd = gt["before_repo_set_cmd"].strip().split("\n")[-1]
+            else:
+                test_patch_cmd = f"""git apply - <<'NEW_PATCH'\n{gt["test_patch"]}\nNEW_PATCH"""
             for cmd in [
                 'git config --global user.email "example@gmail.com"',
                 'git config --global user.name "example"',
-                f"""git apply - <<'NEW_PATCH'\n{gt["test_patch"]}\nNEW_PATCH""",
+                test_patch_cmd,
                 "git add .",
                 'git commit -m "apply test patch"',
             ]:

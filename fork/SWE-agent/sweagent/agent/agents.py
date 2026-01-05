@@ -604,10 +604,14 @@ class DefaultAgent(AbstractAgent):
             self._append_history(history_item)
             self.logger.info(f"\n<<<<<<GT\n{message}\n>>>>>>\n")
         if self.ablation.get("reproduction", False):
+            if gt.get("before_repo_set_cmd", ""):
+                test_patch_cmd = gt["before_repo_set_cmd"].strip().split("\n")[-1]
+            else:
+                test_patch_cmd = f"""git apply - <<'NEW_PATCH'\n{gt["test_patch"]}\nNEW_PATCH"""
             for cmd in [
                 'git config --global user.email "example@gmail.com"',
                 'git config --global user.name "example"',
-                f"""git apply - <<'NEW_PATCH'\n{gt["test_patch"]}\nNEW_PATCH""",
+                test_patch_cmd,
                 "git add .",
                 'git commit -m "apply test patch"',
             ]:
@@ -829,7 +833,12 @@ class DefaultAgent(AbstractAgent):
         self._env.set_env_variables({"PROBLEM_STATEMENT": self._problem_statement.get_problem_statement_for_env()[:10000]})
         self.add_system_message_to_history()
         self.add_demonstrations_to_history()
-        self.add_instance_template_to_history(state=self.tools.get_state(self._env))
+        try:
+            state = self.tools.get_state(self._env)
+        except CommandTimeoutError as e:
+            self.logger.warning(f"get_state timed out during setup: {e}. Using empty state.")
+            state = {}
+        self.add_instance_template_to_history(state=state)
         self.prepare_gt()
         self._chook.on_setup_done()
 
@@ -1183,7 +1192,11 @@ class DefaultAgent(AbstractAgent):
             step.observation = "Exited"
             step.exit_status = "exit_command"
             assert self._env is not None
-            step.state = self.tools.get_state(env=self._env)  # for history
+            try:
+                step.state = self.tools.get_state(env=self._env)  # for history
+            except CommandTimeoutError as e:
+                self.logger.warning(f"get_state timed out on exit: {e}. Using empty state.")
+                step.state = {}
             return step
 
         assert self._env is not None

@@ -581,7 +581,6 @@ class LiteLLMModel(AbstractModel):
         """Model served by the `litellm` library."""
         # Always copy config to avoid shared state between different instances
 
-        sys.path.append("/home/v-kenanli/cloud-gpt")
         from cloudgpt_aoai import get_openai_token_provider
         self.token_provider = get_openai_token_provider()
 

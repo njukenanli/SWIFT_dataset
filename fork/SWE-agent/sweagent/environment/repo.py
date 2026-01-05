@@ -32,9 +32,9 @@ def _get_git_reset_commands(base_commit: str) -> list[str]:
         "git fetch",
         "git status",
         "git restore .",
-        "git reset --hard",
-        f"git checkout {base_commit}",
+        f"git reset --hard {base_commit}",
         "git clean -fdq",
+        f"git checkout {base_commit}",
     ]
 
 

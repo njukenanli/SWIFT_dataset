@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
+from swerex.exceptions import CommandTimeoutError
 from swerex.runtime.abstract import Command as RexCommand
 from swerex.runtime.abstract import UploadRequest
 from typing_extensions import Self
@@ -139,6 +140,10 @@ class ToolConfig(BaseModel):
     execution_timeout: int = 30
     """Timeout for executing commands in the environment"""
 
+    state_command_timeout: int = 120
+    """Timeout for executing state commands (e.g., str_replace_editor view). 
+    Increased default for large files like Go files."""
+
     install_timeout: int = 300
     """Timeout used for each of the installation commands"""
 
@@ -241,6 +246,8 @@ class ToolHandler:
         self.logger = get_logger("swea-tools", emoji="🧰")
         # For testing: Return this state instead of querying the environment
         self.mock_state: dict[str, str] | None = None
+        # Cache last known good state for fallback on timeout
+        self._last_known_state: dict[str, str] = {}
 
     @classmethod
     def from_config(cls, config: ToolConfig) -> Self:
@@ -341,11 +348,17 @@ class ToolHandler:
         if self.mock_state is not None:
             return self.mock_state
 
-        for state_command in self.config.state_commands:
-            env.communicate(state_command, check="warn")
-        combined_state = self._get_state(env)
-        self.logger.debug(f"Retrieved state from environment: {combined_state}")
-        return combined_state
+        try:
+            for state_command in self.config.state_commands:
+                env.communicate(state_command, timeout=self.config.state_command_timeout, check="warn")
+            combined_state = self._get_state(env)
+            self.logger.debug(f"Retrieved state from environment: {combined_state}")
+            # Cache the successful state for fallback
+            self._last_known_state = combined_state
+            return combined_state
+        except CommandTimeoutError as e:
+            self.logger.warning(f"State command timed out after {self.config.state_command_timeout}s: {e}. Returning last known state: {self._last_known_state}")
+            return self._last_known_state
 
     # Blocking
     # --------

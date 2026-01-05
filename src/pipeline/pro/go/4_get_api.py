@@ -387,7 +387,7 @@ def parse_patch(patch: str, container: SetupRuntime) -> dict[str, list[tuple[str
 
 def extract_api_loc(instance):
     # Maximum total size for all API definitions per instance (500KB)
-    MAX_TOTAL_API_SIZE = 500000
+    MAX_TOTAL_API_SIZE = 500_000
     
     image = instance["image"]
     container: SetupRuntime = SetupRuntime.from_launch_image(image, instance["instance_id"], "linux", None, "/app")
@@ -414,9 +414,10 @@ def extract_api_loc(instance):
         for api in path_api_mapping[modify_file_path]:
                 # Check if we've exceeded total size limit
                 if total_api_size >= MAX_TOTAL_API_SIZE:
-                    break
-                    
-                api_info = ext.find_api(api[1], modify_file_path, api[2], True)
+                    print("Warning! result trucated due to length.")
+                    api_info = {"api function definition": "Not available."}
+                else:
+                    api_info = ext.find_api(api[1], modify_file_path, api[2], True)
                 
                 # Skip duplicate API definitions (same file + line range)
                 if "file of api definition" in api_info and "lineno of api definition" in api_info:
@@ -510,4 +511,4 @@ if __name__ == "__main__":
     print(len(done))
     instances = [i for i in instances if i["instance_id"] not in done]
     print(len(instances), flush=True)
-    main(instances)
+    main(reversed(instances))

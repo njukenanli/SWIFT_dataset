@@ -833,7 +833,12 @@ class DefaultAgent(AbstractAgent):
         self._env.set_env_variables({"PROBLEM_STATEMENT": self._problem_statement.get_problem_statement_for_env()[:10000]})
         self.add_system_message_to_history()
         self.add_demonstrations_to_history()
-        self.add_instance_template_to_history(state=self.tools.get_state(self._env))
+        try:
+            state = self.tools.get_state(self._env)
+        except CommandTimeoutError as e:
+            self.logger.warning(f"get_state timed out during setup: {e}. Using empty state.")
+            state = {}
+        self.add_instance_template_to_history(state=state)
         self.prepare_gt()
         self._chook.on_setup_done()
 
@@ -1187,7 +1192,11 @@ class DefaultAgent(AbstractAgent):
             step.observation = "Exited"
             step.exit_status = "exit_command"
             assert self._env is not None
-            step.state = self.tools.get_state(env=self._env)  # for history
+            try:
+                step.state = self.tools.get_state(env=self._env)  # for history
+            except CommandTimeoutError as e:
+                self.logger.warning(f"get_state timed out on exit: {e}. Using empty state.")
+                step.state = {}
             return step
 
         assert self._env is not None

@@ -29,7 +29,7 @@ class Repo(Protocol):
 
 def _get_git_reset_commands(base_commit: str) -> list[str]:
     return [
-        "git fetch",
+        # "git fetch",  # Disabled to allow offline resets.
         "git status",
         "git restore .",
         f"git reset --hard {base_commit}",

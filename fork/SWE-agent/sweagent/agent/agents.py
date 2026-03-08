@@ -738,6 +738,21 @@ class DefaultAgent(AbstractAgent):
                        "3) Run reproduction and regression tests to validate your fix. If any of the testcases required above fails, go back to explore and edit again.\n"
                        "4) If you pass both reproduction and regression tests, submit.\n"
                     )
+        elif self.ablation.get("reproduction", False) and self.ablation.get("location", False):
+            user_requirement = ("Following your colleagues' contributions, your next steps should be:\n"
+                       "1) Explore the source codes if you want to understand the contexts of the buggy locations or testcases better. But remember that all the locations that need to edited have been listed above.\n"
+                       "2) Edit all the locations specified by your colleagues to resolve the issue.\n"
+                       "3) Run reproduction tests to validate your fix. Due to time limit, do not run the regression tests in the repository. If any of the testcases required above fails, go back to explore and edit again.\n"
+                       "4) If you pass all the reproduction tests, submit.\n"
+                    )
+        elif self.ablation.get("regression", False) and self.ablation.get("location", False):
+            user_requirement = ("Following your colleagues' contributions, your next steps should be:\n"
+                       "1) Explore the source codes if you want to understand the contexts of the buggy locations or testcases better. But remember that all the locations that need to edited have been listed above.\n"
+                       "2) Create a script to reproduce the problem and execute it with `python <filename.py>` using the bash tool, to confirm the problem.\n"
+                       "3) Edit all the locations specified by your colleagues to resolve the issue.\n"
+                       "4) Rerun your reproduce script to confirm that the error is fixed. Run the regression tests found by your colleague to check that your edits have not broken anything else. If your reproduce script or any of the regression testcases required above fail, go back to explore and edit again.\n"
+                       "5) If you pass both your reproduce script and all the regression tests required above, submit your answer.\n"
+                    )
         elif self.ablation.get("reproduction", False) and self.ablation.get("regression", False):
             user_requirement = ("Following your colleagues' contributions, your next steps should be:\n"
                        "1) As a first step, it might be a good idea to find and read code relevant to the <pr_description>. \n"
@@ -767,7 +782,7 @@ class DefaultAgent(AbstractAgent):
       2. Create a script to reproduce the problem and execute it with `python <filename.py>` using the bash tool, to confirm the problem.
       3. Edit the sourcecode of the repo to resolve the issue.
       4. Rerun your reproduce script to confirm that the error is fixed. Run the regression tests found by your colleague to check that your edits have not broken anything else. If your reproduce script or any of the regression testcases required above fail, go back to explore and edit again.
-      5. If you pass both your reproduce script and all the regression tests found by your colleague, submit your answer.
+      5. If you pass both your reproduce script and all the regression tests required above, submit your answer.
 """
         else:
             user_requirement = """
@@ -1090,7 +1105,7 @@ class DefaultAgent(AbstractAgent):
         repo_name = "/"
         if self._env.repo is not None:
             repo_name = f"/{self._env.repo.repo_name}"
-        submission_command = "git add -A && git diff --cached --diff-filter=MR --text > /root/model.patch"
+        submission_command = "git add -A && git diff --cached --diff-filter=MAR --text > /root/model.patch"
         self.logger.info("Executing submission command %s in %s", submission_command, repo_name)
         try:
             self._env.execute_command(submission_command, check=True, cwd=repo_name)

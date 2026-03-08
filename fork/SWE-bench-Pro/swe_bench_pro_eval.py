@@ -464,7 +464,7 @@ def main():
     # Filter patches to only include those with matching instance_ids in the raw sample data
     valid_patches = []
     missing_instances = []
-    for patch_sample in patches_to_run:
+    for patch_sample in patches_to_run if isinstance(patches_to_run, list) else patches_to_run.values():
         instance_id = patch_sample["instance_id"]
         if instance_id in raw_sample_df.index:
             valid_patches.append(patch_sample)

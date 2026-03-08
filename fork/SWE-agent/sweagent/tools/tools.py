@@ -356,7 +356,7 @@ class ToolHandler:
             # Cache the successful state for fallback
             self._last_known_state = combined_state
             return combined_state
-        except CommandTimeoutError as e:
+        except Exception as e:
             self.logger.warning(f"State command timed out after {self.config.state_command_timeout}s: {e}. Returning last known state: {self._last_known_state}")
             return self._last_known_state
 

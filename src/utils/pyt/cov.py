@@ -2,6 +2,7 @@ import re
 import shlex
 import os
 import json
+import time
 from typing import TypedDict
 from src.utils.runtime import SetupRuntime
 from src.utils.pyt.content_extract import Extractor
@@ -315,10 +316,13 @@ if __name__ == "__main__":
     print(valid_res)
     del cov
 
+Frame = tuple[str, int, str, str] # file_path, lineno, func_name, line content
+Stack = list[Frame]
+
 class Trace(TypedDict):
     error: str
     error_content: str
-    frames: list[tuple[str, int, str, str]] # file_path, lineno, func_name, line content
+    frames: Stack 
 
 class ErrorStackExtractor:
     def __init__(self, instance_id: str, container: "SetupRuntime", patch_to_apply: str, cmd: str):
@@ -563,3 +567,49 @@ sys.settrace(_trace_fn)
         print(log, "\n", json.dumps(trace_list, indent=True), flush=True)
 
         return trace_list
+
+MergedTrace = list[tuple[str,str,list[tuple[int,str]]]] # file_path, func_name, list[(line_number, line_content)]
+
+class StackTraceExtractorByInjection:
+    def __init__(self, instance_id: str, container: "SetupRuntime", patch_to_apply: str, cmd: str):
+        self.instance_id = instance_id
+        self.container: "SetupRuntime" = container
+        # Setup repo/runtime, then apply patch (same pattern as CoverageExtractor)
+        self.container.send_command(cmd).output
+        self.container.send_command(
+            f"git apply - <<'NEW_PATCH'\n{patch_to_apply}\nNEW_PATCH"
+        ).output
+        self.last_std = ""
+
+    def inject_stack_collector_into_source(self, locs: dict[str, tuple[int,int]]) -> None:
+        '''
+        input: mapping of file_path to line number range
+        Inject a trace collector into each location to print stack trace when the code is executed to that location
+        print stack trace to /mnt/instance_id.txt with each line in the format of file_path lineno func_name line_content
+        the first item the most outside frame, the last item the most inner frame (at the injected location)
+        should not interrupt normal code execution
+        '''
+        pass
+
+    def parse_trace(self, log: str) -> list[Stack]:
+        '''
+        the first item the most outside frame, the last item the most inner frame (at the injected location)
+        '''
+
+    def merge_trace_by_func(self, traces: list[Stack]) -> list[MergedTrace]:
+        '''
+        Merge two stacks if file_path and func_name are the same 
+        '''
+    
+    def extract(self, test_cmd: str, locs: dict[str, tuple[int,int]]) -> list[MergedTrace]:
+        self.inject_stack_collector_into_source(locs)
+        self.container.send_command(test_cmd)
+        time.sleep(16)
+        with open(f"data/logs/{self.instance_id}.txt") as f:
+            log=f.read()
+        stacks: list[Stack] = self.parse_trace(log)
+        merged_stacs: list[MergedTrace] = self.merge_trace_by_func(stacks)
+        print(self.instance_id, [len(i) for i in merged_stacs], flush=True)
+        return merged_stacs
+
+

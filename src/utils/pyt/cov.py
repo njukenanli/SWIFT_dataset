@@ -568,12 +568,12 @@ sys.settrace(_trace_fn)
 
         return trace_list
 
-MergedTrace = list[tuple[str,str,list[tuple[int,str]]]] # file_path, func_name, list[(line_number, line_content)]
+# MergedTrace = list[tuple[str,str,list[tuple[int,str]]]] # file_path, func_name, list[(line_number, line_content)]
 
 class StackTraceExtractorByInjection:
-    def __init__(self, instance_id: str, container: "SetupRuntime", patch_to_apply: str, cmd: str):
+    def __init__(self, instance_id: str, container: SetupRuntime, patch_to_apply: str, cmd: str):
         self.instance_id = instance_id
-        self.container: "SetupRuntime" = container
+        self.container: SetupRuntime = container
         # Setup repo/runtime, then apply patch (same pattern as CoverageExtractor)
         self.container.send_command(cmd).output
         self.container.send_command(
@@ -581,7 +581,7 @@ class StackTraceExtractorByInjection:
         ).output
         self.last_std = ""
 
-    def inject_stack_collector_into_source(self, locs: dict[str, tuple[int,int]]) -> None:
+    def inject_stack_collector_into_source(self, locs: dict[str, list[int]]) -> None:
         '''
         input: mapping of file_path to line number range
         Inject a trace collector into each location to print stack trace when the code is executed to that location
@@ -589,27 +589,250 @@ class StackTraceExtractorByInjection:
         the first item the most outside frame, the last item the most inner frame (at the injected location)
         should not interrupt normal code execution
         '''
+
+        out_path = f"/mnt/{self.instance_id}.txt"
+        tracer_script = r'''
+import atexit
+import json
+import linecache
+import os
+import sys
+import threading
+
+OUT_PATH = "REPLACE_OUT_PATH"
+TARGETS = REPLACE_TARGETS
+
+_lock = threading.Lock()
+_seen_hits = set()
+_fh = None
+
+def _open_out():
+    global _fh
+    if _fh is None:
+        _fh = open(OUT_PATH, "a", encoding="utf-8", buffering=1, errors="replace")
+    return _fh
+
+def _norm_variants(path):
+    return path.replace("/testbed/", "").replace("/app/", "").strip("/")
+
+def _in_targets(filename, lineno):
+    lines = TARGETS.get(_norm_variants(filename), None)
+    if lines is None:
+        return False
+    return (lineno in lines)
+
+def _collect_stack(frame):
+    def _get_context(file_path, line_no, radius):
+        start = max(1, line_no - radius)
+        end = line_no + radius
+        rows = []
+        for n in range(start, end + 1):
+            txt = linecache.getline(file_path, n)
+            if not isinstance(txt, str):
+                continue
+            txt = txt.rstrip("\n")
+            if (not txt) and n != line_no:
+                continue
+            rows.append(f"{n}:{txt}")
+        return "\n".join(rows)
+
+    stack = []
+    cur = frame
+    while cur is not None:
+        code = cur.f_code
+        file_path = code.co_filename
+        line_no = cur.f_lineno
+        func_name = code.co_name
+        normalized = str(func_name).replace("testbed", "").replace("_pytest", "").lower()
+        if "test" in normalized:
+            line = linecache.getline(file_path, line_no)
+            line = line.rstrip("\n") if isinstance(line, str) else ""
+        else:
+            line = _get_context(file_path, line_no, 15)
+        stack.append((file_path, line_no, func_name, line))
+        cur = cur.f_back
+    stack.reverse()
+    return stack
+
+def _write_stack(stack):
+    try:
+        f = _open_out()
+        f.write("TRACE_STACK_BEGIN\n")
+        for item in stack:
+            f.write("FRAME|" + json.dumps(item, ensure_ascii=False) + "\n")
+        f.write("TRACE_STACK_END\n")
+        f.flush()
+    except Exception:
         pass
+
+def _trace(frame, event, arg):
+    if event != "line":
+        return _trace
+    try:
+        file_path = frame.f_code.co_filename
+        line_no = frame.f_lineno
+        if (not _in_targets(file_path, line_no)):
+            return _trace
+        hit_key = (file_path, line_no)
+        with _lock:
+            if hit_key in _seen_hits:
+                return _trace
+            _seen_hits.add(hit_key)
+        _write_stack(_collect_stack(frame))
+    except Exception:
+        pass
+    return _trace
+
+def _cleanup():
+    global _fh
+    try:
+        if _fh is not None:
+            _fh.close()
+    except Exception:
+        pass
+    _fh = None
+
+atexit.register(_cleanup)
+sys.settrace(_trace)
+try:
+    threading.settrace(_trace)
+except Exception:
+    pass
+'''.replace("REPLACE_OUT_PATH", out_path).replace("REPLACE_TARGETS", json.dumps(locs))
+
+        self.container.send_command(f"rm -f {out_path}")
+        self.container.send_command(
+            "cat > /tmp/tracer_inject.py << 'TRACER_EOF'\n"
+            f"{tracer_script}\n"
+            "TRACER_EOF"
+        )
+        self.container.send_command(
+            "cat > /tmp/sitecustomize.py << 'SITE_EOF'\n"
+            "import tracer_inject\n"
+            "SITE_EOF"
+        )
+        return None
 
     def parse_trace(self, log: str) -> list[Stack]:
         '''
         the first item the most outside frame, the last item the most inner frame (at the injected location)
         '''
+        traces: list[Stack] = []
+        current: Stack = []
+        for raw in log.splitlines():
+            line = raw.strip()
+            if not line:
+                continue
+            if line == "TRACE_STACK_BEGIN":
+                current = []
+                continue
+            if line == "TRACE_STACK_END":
+                if current:
+                    traces.append(current)
+                current = []
+                continue
+            if not line.startswith("FRAME|"):
+                continue
+            payload = line[len("FRAME|"):]
+            try:
+                item = json.loads(payload)
+            except json.JSONDecodeError:
+                continue
+            if (not isinstance(item, list)) or len(item) != 4:
+                continue
+            file_path, lineno, func_name, line_content = item
+            try:
+                lineno = int(lineno)
+            except (TypeError, ValueError):
+                continue
+            current.append((str(file_path), lineno, str(func_name), str(line_content)))
+        return traces
 
-    def merge_trace_by_func(self, traces: list[Stack]) -> list[MergedTrace]:
+    def merge_trace_by_func(self, traces: list[Stack]) -> list[Stack]:
         '''
-        Merge two stacks if file_path and func_name are the same 
+        If
+        Trace a: [A, B, C, D]
+        Trace b: [A, B, C, D, E, F ...]
+        where A, B, C ... is (file_path, func_name) (no need to consider line number)
+        retain b and discard a.
+        If 
+        Trace a: [A, B, C, D]
+        Trace b: [A, B, C, D]
+        retain a.
+        If any of the two frames to be compared does not have a function name, keep both a and b.
         '''
+        def relation(a: Stack, b: Stack) -> str:
+            """
+            Returns one of:
+              - "same": a and b have the same (file, func) sequence
+              - "a_prefix_b": a is a strict prefix of b by (file, func)
+              - "b_prefix_a": b is a strict prefix of a by (file, func)
+              - "different": comparable but diverges
+              - "incomparable": some compared frame misses function name
+            """
+            min_len = min(len(a), len(b))
+            for i in range(min_len):
+                a_file, _, a_func, _ = a[i]
+                b_file, _, b_func, _ = b[i]
+                if (not a_func) or (not b_func):
+                    return "incomparable"
+                if (a_file, a_func) != (b_file, b_func):
+                    return "different"
+            if len(a) == len(b):
+                return "same"
+            if len(a) < len(b):
+                return "a_prefix_b"
+            return "b_prefix_a"
+
+        kept: dict[int, Stack] = {}
+        for cur in traces:
+            if not cur:
+                continue
+
+            discard_cur = False
+            remove: list[int] = []
+            for i, prev in kept.items():
+                rel = relation(cur, prev)
+                if rel == "same":
+                    # Keep the first one seen (prev), discard cur.
+                    discard_cur = True
+                    break
+                if rel == "a_prefix_b":
+                    # cur is shorter and fully covered by prev -> discard cur.
+                    discard_cur = True
+                    break
+                if rel == "b_prefix_a":
+                    # prev is shorter and covered by cur -> remove prev.
+                    remove.append(i)
+
+            if discard_cur:
+                continue
+
+            for i in remove:
+                del kept[i]
+            key = max(kept.keys())+1 if len(kept.keys()) > 0 else 1
+            kept[key] = cur
+
+        # JSON serialization downstream expects concrete list objects.
+        return list(kept.values())
     
-    def extract(self, test_cmd: str, locs: dict[str, tuple[int,int]]) -> list[MergedTrace]:
+    def extract(self, test_cmd: str, locs: dict[str, list[int]]) -> list[Stack]:
+        '''
+        locs: file_name: (start_line, end_line)
+        '''
         self.inject_stack_collector_into_source(locs)
-        self.container.send_command(test_cmd)
+        traced_cmd = f"PYTHONPATH=/tmp:$PYTHONPATH {test_cmd}"
+        self.container.send_command(traced_cmd)
         time.sleep(16)
-        with open(f"data/logs/{self.instance_id}.txt") as f:
-            log=f.read()
+        host_path = f"data/logs/{self.instance_id}.txt"
+        if os.path.exists(host_path):
+            with open(host_path, encoding="utf-8", errors="replace") as f:
+                log = f.read()
+        else:
+            print(f"Error! {host_path} not found!")
+            log = ""
+        # self.container.send_command(f"rm -f /mnt/{self.instance_id}.txt")
         stacks: list[Stack] = self.parse_trace(log)
-        merged_stacs: list[MergedTrace] = self.merge_trace_by_func(stacks)
-        print(self.instance_id, [len(i) for i in merged_stacs], flush=True)
-        return merged_stacs
-
-
+        merged_stacks: list[Stack] = self.merge_trace_by_func(stacks)
+        print(self.instance_id, [len(i) for i in merged_stacks], flush=True)
+        return merged_stacks

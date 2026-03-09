@@ -106,3 +106,33 @@ def extract_file_line(patch_text: str) -> dict[str, list[tuple[int]]]:
         result[pf.path] = sorted(symbols)
 
     return result
+
+
+def get_deleted_loc(patch: str) -> dict[str, list[int]]:
+    '''
+    returns: file_path : [lineno1, lineno2, ...]
+    merge different deleted line numbers into one file path.
+    '''
+    patch_set = PatchSet(patch.splitlines())
+    result: dict[str, set[int]] = {}
+
+    for pf in patch_set:
+        if pf.is_added_file:
+            continue
+        if pf.is_removed_file:
+            continue
+        if pf.path.strip().lower().split(".")[-1] in ["md", "rst", "pyi"]:
+            continue
+        if "/doc/" in pf.path or "/docs/" in pf.path:
+            continue
+
+        norm_path = pf.path.replace("/testbed/", "").replace("/app/", "").strip("/")
+        deleted_lines: set[int] = result.setdefault(norm_path, set())
+        for hunk in pf:
+            for line in hunk:
+                if getattr(line, "is_removed", False):
+                    line_no = getattr(line, "source_line_no", None)
+                    if isinstance(line_no, int):
+                        deleted_lines.add(line_no)
+
+    return {path: list(sorted(list(lines))) for path, lines in result.items() if lines}

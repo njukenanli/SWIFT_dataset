@@ -325,14 +325,19 @@ class Trace(TypedDict):
     frames: Stack 
 
 class ErrorStackExtractor:
-    def __init__(self, instance_id: str, container: "SetupRuntime", patch_to_apply: str, cmd: str):
+    def __init__(self, instance_id: str, container: "SetupRuntime", patch_to_apply: str, cmd: str | list[str]):
         self.instance_id = instance_id
         self.container: "SetupRuntime" = container
         # Setup repo/runtime, then apply patch (same pattern as CoverageExtractor)
-        self.container.send_command(cmd).output
-        self.container.send_command(
-            f"git apply - <<'NEW_PATCH'\n{patch_to_apply}\nNEW_PATCH"
-        ).output
+        if isinstance(cmd, str):
+            self.container.send_command(cmd).output
+        elif isinstance(cmd, list):
+            for single_cmd in cmd:
+                self.container.send_command(single_cmd).output
+        if patch_to_apply.strip():
+            self.container.send_command(
+                f"git apply - <<'NEW_PATCH'\n{patch_to_apply}\nNEW_PATCH"
+            ).output
         self.last_std = ""
 
     def _build_error_trace_command(self, command: str) -> str:
@@ -575,10 +580,13 @@ class StackTraceExtractorByInjection:
         self.instance_id = instance_id
         self.container: SetupRuntime = container
         # Setup repo/runtime, then apply patch (same pattern as CoverageExtractor)
-        self.container.send_command(cmd).output
-        self.container.send_command(
-            f"git apply - <<'NEW_PATCH'\n{patch_to_apply}\nNEW_PATCH"
-        ).output
+        if isinstance(cmd, str):
+            self.container.send_command(cmd).output
+        elif isinstance(cmd, list):
+            for single_cmd in cmd:
+                self.container.send_command(single_cmd).output
+        if patch_to_apply.strip():
+            self.container.apply_patch(patch_to_apply)
         self.last_std = ""
 
     def inject_stack_collector_into_source(self, locs: dict[str, list[int]]) -> None:
@@ -643,8 +651,11 @@ def _collect_stack(frame):
         file_path = code.co_filename
         line_no = cur.f_lineno
         func_name = code.co_name
-        normalized = str(func_name).replace("testbed", "").replace("_pytest", "").lower()
-        if "test" in normalized:
+        if "frozen" in file_path:
+            cur = cur.f_back
+            continue
+        normalized = str(file_path).replace("testbed", "").replace("_pytest", "").lower()
+        if ("test" in normalized) or ("python3" in file_path and "_pytest" in file_path) or ("site-packages" in file_path and "_pytest" in file_path):
             line = linecache.getline(file_path, line_no)
             line = line.rstrip("\n") if isinstance(line, str) else ""
         else:
@@ -701,11 +712,7 @@ except Exception:
 '''.replace("REPLACE_OUT_PATH", out_path).replace("REPLACE_TARGETS", json.dumps(locs))
 
         self.container.send_command(f"rm -f {out_path}")
-        self.container.send_command(
-            "cat > /tmp/tracer_inject.py << 'TRACER_EOF'\n"
-            f"{tracer_script}\n"
-            "TRACER_EOF"
-        )
+        self.container.write_file(tracer_script, "/tmp/tracer_inject.py")
         self.container.send_command(
             "cat > /tmp/sitecustomize.py << 'SITE_EOF'\n"
             "import tracer_inject\n"
@@ -816,6 +823,25 @@ except Exception:
         # JSON serialization downstream expects concrete list objects.
         return list(kept.values())
     
+    def cutoff_trace_by_loc(self, trace: Stack, locs: dict[str, list[int]]):
+        res: Stack = []
+        for frame in trace:
+            norm_path = frame[0].replace("/testbed/", "").replace("/app/", "").strip("/")
+            if frame[1] not in locs.get(norm_path, []):
+                res.append(frame)
+        if "test" in res[-1][0].replace("/testbed/", "").replace("_pytest", ""):
+            res = []
+        return res
+    
+    def filter(self, stacks: list[Stack], locs: dict[str, list[str]]) -> list[Stack]:
+        res = []
+        paths = locs.keys()
+        for stack in stacks:
+            norm = stack[-1][0].replace("/testbed/", "").replace("/_pytest/", "").strip("./").strip("/")
+            if ("test" not in norm):
+                res.append(stack)
+        return res
+    
     def extract(self, test_cmd: str, locs: dict[str, list[int]]) -> list[Stack]:
         '''
         locs: file_name: (start_line, end_line)
@@ -823,7 +849,7 @@ except Exception:
         self.inject_stack_collector_into_source(locs)
         traced_cmd = f"PYTHONPATH=/tmp:$PYTHONPATH {test_cmd}"
         self.container.send_command(traced_cmd)
-        time.sleep(16)
+        time.sleep(16) # wait for file sys to sync
         host_path = f"data/logs/{self.instance_id}.txt"
         if os.path.exists(host_path):
             with open(host_path, encoding="utf-8", errors="replace") as f:
@@ -835,4 +861,6 @@ except Exception:
         stacks: list[Stack] = self.parse_trace(log)
         merged_stacks: list[Stack] = self.merge_trace_by_func(stacks)
         print(self.instance_id, [len(i) for i in merged_stacks], flush=True)
-        return merged_stacks
+        filtered_stacks: list[Stack] = self.filter(merged_stacks, locs)
+        print(self.instance_id, [len(i) for i in filtered_stacks], flush=True)
+        return filtered_stacks

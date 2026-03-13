@@ -136,3 +136,94 @@ def get_deleted_loc(patch: str) -> dict[str, list[int]]:
                         deleted_lines.add(line_no)
 
     return {path: list(sorted(list(lines))) for path, lines in result.items() if lines}
+
+
+def get_added_loc(patch: str) -> dict[str, list[int]]:
+    '''
+    returns: file_path : [lineno1, lineno2, ...]
+    merge different line numbers into one file path.
+    '''
+    patch_set = PatchSet(patch.splitlines())
+    result: dict[str, set[int]] = {}
+
+    for pf in patch_set:
+        if pf.is_added_file:
+            continue
+        if pf.is_removed_file:
+            continue
+        if pf.path.strip().lower().split(".")[-1] in ["md", "rst", "pyi"]:
+            continue
+        if "/doc/" in pf.path or "/docs/" in pf.path:
+            continue
+
+        norm_path = pf.path.replace("/testbed/", "").replace("/app/", "").strip("/")
+        added_lines: set[int] = result.setdefault(norm_path, set())
+        for hunk in pf:
+            for line in hunk:
+                if getattr(line, "is_added", False):
+                    line_no = getattr(line, "target_line_no", None)
+                    if isinstance(line_no, int):
+                        added_lines.add(line_no)
+
+    return {path: list(sorted(list(lines))) for path, lines in result.items() if lines}
+
+def get_neighbor_loc(patch: str) -> dict[str, list[int]]:
+    '''
+    get -1, -2 line numbers above an added block and +1, +2 line numbers below an added block
+    returns: file_path : [lineno1, lineno2, ...]
+    merge different line numbers into one file path.
+    '''
+    patch_set = PatchSet(patch.splitlines())
+    result: dict[str, set[int]] = {}
+
+    for pf in patch_set:
+        if pf.is_added_file:
+            continue
+        if pf.is_removed_file:
+            continue
+        if pf.path.strip().lower().split(".")[-1] in ["md", "rst", "pyi"]:
+            continue
+        if "/doc/" in pf.path or "/docs/" in pf.path:
+            continue
+
+        norm_path = pf.path.replace("/testbed/", "").replace("/app/", "").strip("/")
+        dneighbor_lines: set[int] = result.setdefault(norm_path, set())
+        for hunk in pf:
+            source_cursor = hunk.source_start
+            block_anchor: int | None = None
+            for line in hunk:
+                if getattr(line, "is_added", False):
+                    if block_anchor is None:
+                        # Added lines do not exist in source; anchor the block to the
+                        # source insertion point (the next source line number).
+                        block_anchor = source_cursor
+                    continue
+
+                if block_anchor is not None:
+                    for neighbor in (
+                        block_anchor - 2,
+                        block_anchor - 1,
+                        block_anchor,
+                        block_anchor + 1,
+                        block_anchor + 2,
+                    ):
+                        if neighbor > 0:
+                            dneighbor_lines.add(neighbor)
+                    block_anchor = None
+
+                source_line_no = getattr(line, "source_line_no", None)
+                if isinstance(source_line_no, int):
+                    source_cursor = source_line_no + 1
+
+            if block_anchor is not None:
+                for neighbor in (
+                    block_anchor - 2,
+                    block_anchor - 1,
+                    block_anchor,
+                    block_anchor + 1,
+                    block_anchor + 2,
+                ):
+                    if neighbor > 0:
+                        dneighbor_lines.add(neighbor)
+
+    return {path: list(sorted(list(lines))) for path, lines in result.items() if lines}

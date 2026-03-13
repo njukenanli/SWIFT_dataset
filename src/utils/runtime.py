@@ -360,6 +360,7 @@ function prompt {
 
         output, metadata = self._read_raw_output(timeout=timeout)
         if metadata is not None:
+            #print(output, flush=True, end = "\n\n\n\n\n\n")
             return CommandResult(output=output, metadata=metadata)
 
         # handle timeout
@@ -378,6 +379,19 @@ function prompt {
         )
 
         return CommandResult(output=output, metadata=fallback_metadata)
+    
+    def write_file(self, content, path) -> None:
+        import uuid
+        file_name = f"{uuid.uuid4()}.txt"
+        with open(f"data/logs/{file_name}", "w") as f:
+            f.write(content)
+        time.sleep(8)
+        self.send_command(f"mv /mnt/{file_name} {path}")
+        return
+    
+    def apply_patch(self, patch) -> None:
+        self.write_file(patch, "/tmp/gold_patch.diff")
+        self.send_command("git apply -v /tmp/gold_patch.diff")
 
     def copy_to_container(self, src: str, dest: str) -> None:
         """

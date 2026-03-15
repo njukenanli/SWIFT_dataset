@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -18,31 +19,41 @@ def main() -> None:
     repo_root = registry.get("ROOT", os.getenv("ROOT"))
     assert repo_root
 
-    patch_path = Path("/root/model.patch")
 
-    subprocess.run(
-        f"git add -A && git diff --cached --diff-filter=MAR --text > {patch_path}",
-        shell=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        cwd=repo_root,
-    )
+    file_content = ""
+    target_file = None
+    for file in [
+        "/testbed/answer.json",
+        "/testbed/reproduction.py",
+        "/testbed/reproduction.go"
+    ]:
+        if os.path.exists(file):
+            target_file = file
+            with open(file) as f:
+                file_content = f.read()
 
-    patch = patch_path.read_text(errors="backslashreplace")
 
     submit_review_messages = registry.get("SUBMIT_REVIEW_MESSAGES", [])
     n_stages = len(submit_review_messages)
     current_stage = registry.get("SUBMIT_STAGE", 0)
     if not args.force and current_stage != n_stages:
-        message = submit_review_messages[current_stage]
-        message = message.replace("{{diff}}", patch)
-        message = message.replace("{{problem_statement}}", registry.get("PROBLEM_STATEMENT", ""))
+        if file_content.strip():
+            if target_file == "/testbed/answer.json":
+                try: 
+                    json.loads(file_content)
+                    message = f"This is your submission: \n{file_content}\nEnsure it's correct. If correct, submit again. If not, go back to explore and modify your submission file."
+                except: 
+                    message = "Your submission /testbed/answer.json has JSON DECODE ERROR, please fix your /testbed/answer.json"
+            else:
+                message = f"This is your submission: \n{file_content}\nEnsure it's correct. If correct, submit again. If not, go back to explore and modify your submission file."
+        else:
+            message = f"The file to submit your answer \n{target_file}\n is empty. Please write your answer to this file. If you haven't finished, go back to explore."
         registry["SUBMIT_STAGE"] = current_stage + 1
         print(message)
         sys.exit(0)
 
     print("<<SWE_AGENT_SUBMISSION>>")
-    print(patch)
+    print(file_content)
     print("<<SWE_AGENT_SUBMISSION>>")
 
 

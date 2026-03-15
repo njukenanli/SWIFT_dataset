@@ -703,7 +703,7 @@ class DefaultAgent(AbstractAgent):
         
         if self.ablation.get("context", False) and gt["error_context"]:
             message = "Hints: Your colleague has provided the error stack traces from running reproduction testcaces related to this problem.\n"
-            message += "Each layer of trace is in the format of (file path, line number, function name, source code).\n"
+            message += "Each frame of trace is in the format of (file path, line number, function name, source code).\n"
             message += json.dumps(gt["error_context"], indent=True) + "\n"
             message += "The error stack traces can be some hints to help you locate the locations to be edited, and understand the code contexts which affect the locations to be edited or your edits would affect.\n"
             history_item: dict[str, Any] = {

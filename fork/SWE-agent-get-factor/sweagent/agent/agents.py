@@ -564,6 +564,170 @@ class DefaultAgent(AbstractAgent):
         self._chook.on_query_message_added(**item)
         self.history.append(item)  # type: ignore
 
+    def get_instructions(self):
+        instance = self._problem_statement.extra_fields["instance"]
+        lang = instance.get("repo_language", "python").strip().lower()
+
+        if self.ablation.get("location", False):
+            with open("examples/location/0.json") as f:
+                ex = f.read()
+            with open("examples/location/1.json") as f:
+                ex1 = f.read()
+            with open("examples/location/2.json") as f:
+                ex2 = f.read()
+            message = f"""
+You need to find the locations that need to be edited to resolve the issue.
+You don't need to edit the code.
+You only need to find the locations that need to be edited.
+You answer should be written into /testbed/answer.json
+We will check the correctness of your answer by reading /testbed/answer.json
+In /testbed/answer.json, your answer format should be like:
+
+{ex}
+
+# example 1
+{ex1}
+
+# example 2
+{ex2}
+
+Once you have completed /testbed/answer.json, submit.
+"""
+            history_item: dict[str, Any] = {
+                "role": "user",
+                "content": message,
+                "agent": self.name,
+                "message_type": "observation",
+            }
+            self._append_history(history_item)
+            self.logger.info(f"\n<<<<<<GT\n{message}\n>>>>>>\n")
+            self._env.communicate("touch /testbed/answer.json")
+
+        if self.ablation.get("regression", False):
+            with open("examples/regression/0.json") as f:
+                ex = f.read()
+            with open("examples/regression/1.json") as f:
+                ex1 = f.read()
+            message = f"""
+You need to find the correct command to run original regression tests in the repository, and parse the test output to record passed testcases and failed testcases.
+For many repos the regression command is not trivial -- "pytest . / gotest . " does not resolve everything.
+You need to read the repo documents to figure out the correct way to run regression tests -- the test command, the evironment variables to set...
+Usually you don't need to run all tests in the repository -- it's too time-consuming. It is recommended to only test codes related to the issue description in your test command.
+After regression test, direct test output to log file and parse the test output to record passed and failed testcases. If the test framework allows JSON / XML structured output, use it to help log parsing.
+You answer should be written into /testbed/answer.json
+We will check the correctness of your answer by reading /testbed/answer.json
+In /testbed/answer.json, your answer format should be like:
+{ex}
+
+For example:
+{ex1}
+
+You don't need to edit the source codes. 
+Once you have completed /testbed/answer.json, submit.
+"""
+            history_item: dict[str, Any] = {
+                "role": "user",
+                "content": message,
+                "agent": self.name,
+                "message_type": "observation",
+            }
+            self.logger.info(f"\n<<<<<<GT\n{message}\n>>>>>>\n")
+            self._append_history(history_item)
+            self._env.communicate("touch /testbed/answer.json")
+
+        if self.ablation.get("reproduction", False):
+            if lang == "python":
+                target_file = "/testbed/reproduction.py"
+            elif lang == "go":
+                target_file = "/testbed/reproduction.go"
+            message = f"""
+You need to write a reproduction test file to help your colleague reproduce the issue.
+Your reproduction file, when executed, should exactly reveal the issue in the issue description.
+Your reproduction file should fail before the issue is resolved and should pass after the issue is correctly fixed.
+Your should write multiple testcases in the reproduction file to cover all corner cases to ensure all cases are resolved correclty.
+Your reproduction file should be written in {target_file}
+We will only extract contents in {target_file} to check the correctness of your reproduction. Don't write anything elsewhere.
+You don't need to edit the source codes. 
+Once you finish {target_file}, submit.
+            """
+            # git --no-pager diff --no-index /dev/null reproduction.py
+            history_item: dict[str, Any] = {
+                "role": "user",
+                "content": message,
+                "agent": self.name,
+                "message_type": "observation",
+            }
+            self.logger.info(f"\n<<<<<<GT\n{message}\n>>>>>>\n")
+            self._append_history(history_item)
+            self._env.communicate(f"touch {target_file}")
+            
+        if self.ablation.get("api", False):
+            with open("examples/api/1.json") as f:
+                ex1 = f.read()
+            with open("examples/api/2.json") as f:
+                ex2 = f.read()
+            message = f"""
+You need to find all the API functions that need to be used to edit the code to resolve the issue, or the API functions that are used around the locations that need to be edited.
+These API functions are crucial for understanding how to edit the code and avoiding implementing existing utilities again.
+You need to determine where the API functions are used / will be used for editing the source code, and find the definition of these API functions.
+You may need to locate the suspicous locations that might need to be edited to resolve the issue first, before you can discover the necessary API functions to help understand / edit these locations.
+You answer should be written into /testbed/answer.json
+We will check the correctness of your answer by reading /testbed/answer.json
+In /testbed/answer.json, your answer format should be like:
+{ex1}
+
+For example:
+{ex2}
+You don't need to edit the source codes. 
+Once you have completed /testbed/answer.json, submit.
+"""
+            history_item: dict[str, Any] = {
+                "role": "user",
+                "content": message,
+                "agent": self.name,
+                "message_type": "observation",
+            }
+            self.logger.info(f"\n<<<<<<GT\n{message}\n>>>>>>\n")
+            self._append_history(history_item)
+            self._env.communicate("touch /testbed/answer.json")
+
+        if self.ablation.get("context", False):
+            with open("examples/context/1.json") as f:
+                ex = f.read()
+            message = f"""
+You need to find the locations relevant to the issue description, not limited to the locations to be edited, for your colleague.
+Include both the suspicous locations that may need to be edited, and the code contexts related to these locations to be edited, which may affect the locations to be edited or the edited locations may affect in your answer.
+Organize the relations of potentially relevant locations you find into function call stacks.
+You answer should be written into /testbed/answer.json
+We will check the correctness of your answer by reading /testbed/answer.json
+In /testbed/answer.json, your answer format should be like:
+[
+    [
+        ["file path 1", line number, "function name a", "code snippet"],
+        ["file path 2", line number, "function name b", "code snippet"],
+        ["file path 3", line number, "function name c", "code snippet"],
+    ],
+    [ stack 2 ... ],
+    ...
+]
+where a calls b, and b calls c.
+
+For example,
+{ex}
+
+You don't need to edit the source codes. 
+Once you have completed /testbed/answer.json, submit.
+"""
+            history_item: dict[str, Any] = {
+                "role": "user",
+                "content": message,
+                "agent": self.name,
+                "message_type": "observation",
+            }
+            self.logger.info(f"\n<<<<<<GT\n{message}\n>>>>>>\n")
+            self._append_history(history_item)
+            self._env.communicate("touch /testbed/answer.json")
+
     def prepare_gt(self):
         def condense_too_long_P2P(p2p: list) -> list:
             assert isinstance(p2p, list)
@@ -854,7 +1018,7 @@ class DefaultAgent(AbstractAgent):
             self.logger.warning(f"get_state timed out during setup: {e}. Using empty state.")
             state = {}
         self.add_instance_template_to_history(state=state)
-        self.prepare_gt()
+        self.get_instructions()
         self._chook.on_setup_done()
 
     def add_system_message_to_history(self) -> None:
@@ -1105,12 +1269,12 @@ class DefaultAgent(AbstractAgent):
         repo_name = "/"
         if self._env.repo is not None:
             repo_name = f"/{self._env.repo.repo_name}"
-        submission_command = "git add -A && git diff --cached --diff-filter=MAR --text > /root/model.patch"
-        self.logger.info("Executing submission command %s in %s", submission_command, repo_name)
-        try:
-            self._env.execute_command(submission_command, check=True, cwd=repo_name)
-        except Exception as e:
-            self.logger.error("Failed to execute submission command, got %s", e)
+        #submission_command = "git add -A && git diff --cached --diff-filter=MAR --text > /root/model.patch"
+        #self.logger.info("Executing submission command %s in %s", submission_command, repo_name)
+        #try:
+        #    self._env.execute_command(submission_command, check=True, cwd=repo_name)
+        #except Exception as e:
+        #    self.logger.error("Failed to execute submission command, got %s", e)
         # There's still hope for the submission, because the `/root/model.patch` file might have been
         # generated by the state command
         step = self.handle_submission(step, observation="", force_submission=True)
@@ -1118,6 +1282,21 @@ class DefaultAgent(AbstractAgent):
             self.logger.info("Exiting with autosubmission")
             step.observation = "Exited (autosubmitted)"
         return step
+
+    def get_submission(self) -> str:
+        if self.ablation.get("reproduction", False):
+            lang = self._problem_statement.extra_fields["instance"].get("repo_language", "python").strip().lower()
+            if lang == "python":
+                submission = self._env.communicate("touch /testbed/reproduction.py && git --no-pager diff --no-index /dev/null /testbed/reproduction.py")
+            elif lang == "go":
+                submission = self._env.communicate("touch /testbed/reproduction.go && git --no-pager diff --no-index /dev/null /testbed/reproduction.go")
+        else:
+            try:
+                self._env.communicate("touch /testbed/answer.json")
+                submission = self._env.read_file("/testbed/answer.json", encoding="utf-8", errors="backslashreplace")
+            except:
+                submission = str({})
+        return submission
 
     def handle_submission(self, step: StepOutput, *, observation="", force_submission: bool = False) -> StepOutput:
         """Check if there was a submission in the observation and handle it.
@@ -1135,14 +1314,7 @@ class DefaultAgent(AbstractAgent):
         is_submission = self.tools.check_for_submission_cmd(observation or step.observation)
         if is_submission or force_submission:
             assert self._env is not None
-            try:
-                submission = self._env.read_file("/root/model.patch", encoding="utf-8", errors="backslashreplace")
-            except FileNotFoundError:
-                self.logger.warning("Submission file not found, no submission was made")
-                return step
-            except Exception as e:
-                self.logger.exception("Failed to read submission file, got %s", e)
-                return step
+            submission = self.get_submission()
             if submission.strip() != "":
                 step.submission = submission
             else:
@@ -1529,7 +1701,7 @@ class DefaultAgent(AbstractAgent):
 
         self.info["submission"] = step_output.submission
         self.info["exit_status"] = step_output.exit_status  # type: ignore
-        self.info.update(self._get_edited_files_with_context(patch=step_output.submission or ""))  # type: ignore
+        #self.info.update(self._get_edited_files_with_context(patch=step_output.submission or ""))  # type: ignore
         self.info["model_stats"] = self.model.stats.model_dump()
 
         self.add_step_to_trajectory(step_output)

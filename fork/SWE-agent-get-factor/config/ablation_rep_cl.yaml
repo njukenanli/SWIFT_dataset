@@ -3,10 +3,10 @@
 # it with any LM.
 agent:
   model:
-    name: 'gpt-5-20250807'
+    name: 'claude-sonnet-4-6'
     per_instance_cost_limit: 0
     total_cost_limit: 0
-    per_instance_call_limit: 120
+    per_instance_call_limit: 40
     max_input_tokens: 0
     temperature: 0.0
     top_p: 1.0
@@ -27,6 +27,7 @@ agent:
       You don't need to edit the code yourself. 
       You only need to extract the information your colleagues need to help them.
       Your thinking should be thorough and so it's fine if it's very long.
+      The max step limit is 40. You must submit in 40 steps.
     next_step_template: |-
       OBSERVATION:
       {{observation}}
@@ -70,8 +71,8 @@ agent:
     - type: cache_control
       last_n_messages: 2
   ablation:
-    - reproduction: false
+    - reproduction: true
     - regression: false
-    - location: true
+    - location: false
     - context: false
     - api: false

@@ -416,9 +416,9 @@ class EditTool:
         if not path.exists() and command != "create":
             print(f"The path {path} does not exist. Please provide a valid path.")
             sys.exit(7)
-        if path.exists() and command == "create":
-            print(f"File already exists at: {path}. Cannot overwrite files using command `create`.")
-            sys.exit(8)
+        #if path.exists() and command == "create":
+        #    print(f"File already exists at: {path}. Cannot overwrite files using command `create`.")
+        #    sys.exit(8)
         # Check if the path points to a directory
         if path.is_dir():
             if command != "view":

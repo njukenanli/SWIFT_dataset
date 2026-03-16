@@ -1,0 +1,432 @@
+The testcases to reproduce the problem are:
+
+===========================
+# constraints.tests.BaseConstraintTests.test_custom_violation_code_message.test_custom_violation_code_message:
+1|from unittest import mock
+2|
+3|from django.core.exceptions import ValidationError
+4|from django.db import IntegrityError, connection, models
+5|from django.db.models import F
+6|from django.db.models.constraints import BaseConstraint, UniqueConstraint
+7|from django.db.models.functions import Lower
+8|from django.db.transaction import atomic
+9|from django.test import SimpleTestCase, TestCase, skipIfDBFeature, skipUnlessDBFeature
+10|from django.test.utils import ignore_warnings
+11|from django.utils.deprecation import RemovedInDjango60Warning
+12|
+13|from .models import (
+14|    ChildModel,
+15|    ChildUniqueConstraintProduct,
+16|    Product,
+17|    UniqueConstraintConditionProduct,
+18|    UniqueConstraintDeferrable,
+19|    UniqueConstraintInclude,
+20|    UniqueConstraintProduct,
+21|)
+22|
+......
+29|class BaseConstraintTests(SimpleTestCase):
+......
+80|    def test_custom_violation_code_message(self):
+81|        c = BaseConstraint(name="base_name", violation_error_code="custom_code")
+82|        self.assertEqual(c.violation_error_code, "custom_code")
+
+===========================
+# constraints.tests.BaseConstraintTests.test_deconstruction.test_deconstruction:
+1|from unittest import mock
+2|
+3|from django.core.exceptions import ValidationError
+4|from django.db import IntegrityError, connection, models
+5|from django.db.models import F
+6|from django.db.models.constraints import BaseConstraint, UniqueConstraint
+7|from django.db.models.functions import Lower
+8|from django.db.transaction import atomic
+9|from django.test import SimpleTestCase, TestCase, skipIfDBFeature, skipUnlessDBFeature
+10|from django.test.utils import ignore_warnings
+11|from django.utils.deprecation import RemovedInDjango60Warning
+12|
+13|from .models import (
+14|    ChildModel,
+15|    ChildUniqueConstraintProduct,
+16|    Product,
+17|    UniqueConstraintConditionProduct,
+18|    UniqueConstraintDeferrable,
+19|    UniqueConstraintInclude,
+20|    UniqueConstraintProduct,
+21|)
+22|
+......
+29|class BaseConstraintTests(SimpleTestCase):
+......
+84|    def test_deconstruction(self):
+85|        constraint = BaseConstraint(
+86|            name="base_name",
+87|            violation_error_message="custom %(name)s message",
+88|            violation_error_code="custom_code",
+89|        )
+90|        path, args, kwargs = constraint.deconstruct()
+91|        self.assertEqual(path, "django.db.models.BaseConstraint")
+92|        self.assertEqual(args, ())
+93|        self.assertEqual(
+94|            kwargs,
+95|            {
+96|                "name": "base_name",
+97|                "violation_error_message": "custom %(name)s message",
+98|                "violation_error_code": "custom_code",
+99|            },
+100|        )
+
+===========================
+# constraints.tests.CheckConstraintTests.test_eq.test_eq:
+1|from unittest import mock
+2|
+3|from django.core.exceptions import ValidationError
+4|from django.db import IntegrityError, connection, models
+5|from django.db.models import F
+6|from django.db.models.constraints import BaseConstraint, UniqueConstraint
+7|from django.db.models.functions import Lower
+8|from django.db.transaction import atomic
+9|from django.test import SimpleTestCase, TestCase, skipIfDBFeature, skipUnlessDBFeature
+10|from django.test.utils import ignore_warnings
+11|from django.utils.deprecation import RemovedInDjango60Warning
+12|
+13|from .models import (
+14|    ChildModel,
+15|    ChildUniqueConstraintProduct,
+16|    Product,
+17|    UniqueConstraintConditionProduct,
+18|    UniqueConstraintDeferrable,
+19|    UniqueConstraintInclude,
+20|    UniqueConstraintProduct,
+21|)
+22|
+......
+120|class CheckConstraintTests(TestCase):
+121|    def test_eq(self):
+122|        check1 = models.Q(price__gt=models.F("discounted_price"))
+123|        check2 = models.Q(price__lt=models.F("discounted_price"))
+124|        self.assertEqual(
+125|            models.CheckConstraint(check=check1, name="price"),
+126|            models.CheckConstraint(check=check1, name="price"),
+127|        )
+128|        self.assertEqual(models.CheckConstraint(check=check1, name="price"), mock.ANY)
+129|        self.assertNotEqual(
+130|            models.CheckConstraint(check=check1, name="price"),
+131|            models.CheckConstraint(check=check1, name="price2"),
+132|        )
+133|        self.assertNotEqual(
+134|            models.CheckConstraint(check=check1, name="price"),
+135|            models.CheckConstraint(check=check2, name="price"),
+136|        )
+137|        self.assertNotEqual(models.CheckConstraint(check=check1, name="price"), 1)
+138|        self.assertNotEqual(
+139|            models.CheckConstraint(check=check1, name="price"),
+140|            models.CheckConstraint(
+141|                check=check1, name="price", violation_error_message="custom error"
+142|            ),
+143|        )
+144|        self.assertNotEqual(
+145|            models.CheckConstraint(
+146|                check=check1, name="price", violation_error_message="custom error"
+147|            ),
+148|            models.CheckConstraint(
+149|                check=check1, name="price", violation_error_message="other custom error"
+150|            ),
+151|        )
+152|        self.assertEqual(
+153|            models.CheckConstraint(
+154|                check=check1, name="price", violation_error_message="custom error"
+155|            ),
+156|            models.CheckConstraint(
+157|                check=check1, name="price", violation_error_message="custom error"
+158|            ),
+159|        )
+160|        self.assertNotEqual(
+161|            models.CheckConstraint(check=check1, name="price"),
+162|            models.CheckConstraint(
+163|                check=check1, name="price", violation_error_code="custom_code"
+164|            ),
+165|        )
+166|        self.assertEqual(
+167|            models.CheckConstraint(
+168|                check=check1, name="price", violation_error_code="custom_code"
+169|            ),
+170|            models.CheckConstraint(
+171|                check=check1, name="price", violation_error_code="custom_code"
+172|            ),
+173|        )
+
+===========================
+# constraints.tests.CheckConstraintTests.test_repr_with_violation_error_code.test_repr_with_violation_error_code:
+1|from unittest import mock
+2|
+3|from django.core.exceptions import ValidationError
+4|from django.db import IntegrityError, connection, models
+5|from django.db.models import F
+6|from django.db.models.constraints import BaseConstraint, UniqueConstraint
+7|from django.db.models.functions import Lower
+8|from django.db.transaction import atomic
+9|from django.test import SimpleTestCase, TestCase, skipIfDBFeature, skipUnlessDBFeature
+10|from django.test.utils import ignore_warnings
+11|from django.utils.deprecation import RemovedInDjango60Warning
+12|
+13|from .models import (
+14|    ChildModel,
+15|    ChildUniqueConstraintProduct,
+16|    Product,
+17|    UniqueConstraintConditionProduct,
+18|    UniqueConstraintDeferrable,
+19|    UniqueConstraintInclude,
+20|    UniqueConstraintProduct,
+21|)
+22|
+......
+120|class CheckConstraintTests(TestCase):
+......
+198|    def test_repr_with_violation_error_code(self):
+199|        constraint = models.CheckConstraint(
+200|            check=models.Q(price__lt=1),
+201|            name="price_lt_one",
+202|            violation_error_code="more_than_one",
+203|        )
+204|        self.assertEqual(
+205|            repr(constraint),
+206|            "<CheckConstraint: check=(AND: ('price__lt', 1)) name='price_lt_one' "
+207|            "violation_error_code='more_than_one'>",
+208|        )
+
+===========================
+# constraints.tests.CheckConstraintTests.test_validate_custom_error.test_validate_custom_error:
+1|from unittest import mock
+2|
+3|from django.core.exceptions import ValidationError
+4|from django.db import IntegrityError, connection, models
+5|from django.db.models import F
+6|from django.db.models.constraints import BaseConstraint, UniqueConstraint
+7|from django.db.models.functions import Lower
+8|from django.db.transaction import atomic
+9|from django.test import SimpleTestCase, TestCase, skipIfDBFeature, skipUnlessDBFeature
+10|from django.test.utils import ignore_warnings
+11|from django.utils.deprecation import RemovedInDjango60Warning
+12|
+13|from .models import (
+14|    ChildModel,
+15|    ChildUniqueConstraintProduct,
+16|    Product,
+17|    UniqueConstraintConditionProduct,
+18|    UniqueConstraintDeferrable,
+19|    UniqueConstraintInclude,
+20|    UniqueConstraintProduct,
+21|)
+22|
+......
+120|class CheckConstraintTests(TestCase):
+......
+275|    def test_validate_custom_error(self):
+276|        check = models.Q(price__gt=models.F("discounted_price"))
+277|        constraint = models.CheckConstraint(
+278|            check=check,
+279|            name="price",
+280|            violation_error_message="discount is fake",
+281|            violation_error_code="fake_discount",
+282|        )
+283|        # Invalid product.
+284|        invalid_product = Product(price=10, discounted_price=42)
+285|        msg = "discount is fake"
+286|        with self.assertRaisesMessage(ValidationError, msg) as cm:
+287|            constraint.validate(Product, invalid_product)
+288|        self.assertEqual(cm.exception.code, "fake_discount")
+
+===========================
+# constraints.tests.UniqueConstraintTests.test_eq.test_eq:
+1|from unittest import mock
+2|
+3|from django.core.exceptions import ValidationError
+4|from django.db import IntegrityError, connection, models
+5|from django.db.models import F
+6|from django.db.models.constraints import BaseConstraint, UniqueConstraint
+7|from django.db.models.functions import Lower
+8|from django.db.transaction import atomic
+9|from django.test import SimpleTestCase, TestCase, skipIfDBFeature, skipUnlessDBFeature
+10|from django.test.utils import ignore_warnings
+11|from django.utils.deprecation import RemovedInDjango60Warning
+12|
+13|from .models import (
+14|    ChildModel,
+15|    ChildUniqueConstraintProduct,
+16|    Product,
+17|    UniqueConstraintConditionProduct,
+18|    UniqueConstraintDeferrable,
+19|    UniqueConstraintInclude,
+20|    UniqueConstraintProduct,
+21|)
+22|
+......
+336|class UniqueConstraintTests(TestCase):
+......
+342|    def test_eq(self):
+343|        self.assertEqual(
+344|            models.UniqueConstraint(fields=["foo", "bar"], name="unique"),
+345|            models.UniqueConstraint(fields=["foo", "bar"], name="unique"),
+346|        )
+347|        self.assertEqual(
+348|            models.UniqueConstraint(fields=["foo", "bar"], name="unique"),
+349|            mock.ANY,
+350|        )
+351|        self.assertNotEqual(
+352|            models.UniqueConstraint(fields=["foo", "bar"], name="unique"),
+353|            models.UniqueConstraint(fields=["foo", "bar"], name="unique2"),
+354|        )
+355|        self.assertNotEqual(
+356|            models.UniqueConstraint(fields=["foo", "bar"], name="unique"),
+357|            models.UniqueConstraint(fields=["foo", "baz"], name="unique"),
+358|        )
+359|        self.assertNotEqual(
+360|            models.UniqueConstraint(fields=["foo", "bar"], name="unique"), 1
+361|        )
+362|        self.assertNotEqual(
+363|            models.UniqueConstraint(fields=["foo", "bar"], name="unique"),
+364|            models.UniqueConstraint(
+365|                fields=["foo", "bar"],
+366|                name="unique",
+367|                violation_error_message="custom error",
+368|            ),
+369|        )
+370|        self.assertNotEqual(
+371|            models.UniqueConstraint(
+372|                fields=["foo", "bar"],
+373|                name="unique",
+374|                violation_error_message="custom error",
+375|            ),
+376|            models.UniqueConstraint(
+377|                fields=["foo", "bar"],
+378|                name="unique",
+379|                violation_error_message="other custom error",
+380|            ),
+381|        )
+382|        self.assertEqual(
+383|            models.UniqueConstraint(
+384|                fields=["foo", "bar"],
+385|                name="unique",
+386|                violation_error_message="custom error",
+387|            ),
+388|            models.UniqueConstraint(
+389|                fields=["foo", "bar"],
+390|                name="unique",
+391|                violation_error_message="custom error",
+392|            ),
+393|        )
+394|        self.assertNotEqual(
+395|            models.UniqueConstraint(
+396|                fields=["foo", "bar"],
+397|                name="unique",
+398|                violation_error_code="custom_error",
+399|            ),
+400|            models.UniqueConstraint(
+401|                fields=["foo", "bar"],
+402|                name="unique",
+403|                violation_error_code="other_custom_error",
+404|            ),
+405|        )
+406|        self.assertEqual(
+407|            models.UniqueConstraint(
+408|                fields=["foo", "bar"],
+409|                name="unique",
+410|                violation_error_code="custom_error",
+411|            ),
+412|            models.UniqueConstraint(
+413|                fields=["foo", "bar"],
+414|                name="unique",
+415|                violation_error_code="custom_error",
+416|            ),
+417|        )
+
+===========================
+# constraints.tests.UniqueConstraintTests.test_repr_with_violation_error_code.test_repr_with_violation_error_code:
+1|from unittest import mock
+2|
+3|from django.core.exceptions import ValidationError
+4|from django.db import IntegrityError, connection, models
+5|from django.db.models import F
+6|from django.db.models.constraints import BaseConstraint, UniqueConstraint
+7|from django.db.models.functions import Lower
+8|from django.db.transaction import atomic
+9|from django.test import SimpleTestCase, TestCase, skipIfDBFeature, skipUnlessDBFeature
+10|from django.test.utils import ignore_warnings
+11|from django.utils.deprecation import RemovedInDjango60Warning
+12|
+13|from .models import (
+14|    ChildModel,
+15|    ChildUniqueConstraintProduct,
+16|    Product,
+17|    UniqueConstraintConditionProduct,
+18|    UniqueConstraintDeferrable,
+19|    UniqueConstraintInclude,
+20|    UniqueConstraintProduct,
+21|)
+22|
+......
+336|class UniqueConstraintTests(TestCase):
+......
+589|    def test_repr_with_violation_error_code(self):
+590|        constraint = models.UniqueConstraint(
+591|            models.F("baz__lower"),
+592|            name="unique_lower_baz",
+593|            violation_error_code="baz",
+594|        )
+595|        self.assertEqual(
+596|            repr(constraint),
+597|            (
+598|                "<UniqueConstraint: expressions=(F(baz__lower),) "
+599|                "name='unique_lower_baz' violation_error_code='baz'>"
+600|            ),
+601|        )
+
+===========================
+# constraints.tests.UniqueConstraintTests.test_validate_conditon_custom_error.test_validate_conditon_custom_error:
+1|from unittest import mock
+2|
+3|from django.core.exceptions import ValidationError
+4|from django.db import IntegrityError, connection, models
+5|from django.db.models import F
+6|from django.db.models.constraints import BaseConstraint, UniqueConstraint
+7|from django.db.models.functions import Lower
+8|from django.db.transaction import atomic
+9|from django.test import SimpleTestCase, TestCase, skipIfDBFeature, skipUnlessDBFeature
+10|from django.test.utils import ignore_warnings
+11|from django.utils.deprecation import RemovedInDjango60Warning
+12|
+13|from .models import (
+14|    ChildModel,
+15|    ChildUniqueConstraintProduct,
+16|    Product,
+17|    UniqueConstraintConditionProduct,
+18|    UniqueConstraintDeferrable,
+19|    UniqueConstraintInclude,
+20|    UniqueConstraintProduct,
+21|)
+22|
+......
+336|class UniqueConstraintTests(TestCase):
+......
+811|    @skipUnlessDBFeature("supports_partial_indexes")
+812|    def test_validate_conditon_custom_error(self):
+813|        p1 = UniqueConstraintConditionProduct.objects.create(name="p1")
+814|        constraint = UniqueConstraintConditionProduct._meta.constraints[0]
+815|        constraint.violation_error_message = "Custom message"
+816|        constraint.violation_error_code = "custom_code"
+817|        msg = "Custom message"
+818|        with self.assertRaisesMessage(ValidationError, msg) as cm:
+819|            constraint.validate(
+820|                UniqueConstraintConditionProduct,
+821|                UniqueConstraintConditionProduct(name=p1.name, color=None),
+822|            )
+823|        self.assertEqual(cm.exception.code, "custom_code")
+
+===========================
+
+The command to run these reproduction testcases is: 
+./tests/runtests.py --verbosity 2 --settings=test_sqlite --parallel 1  constraints.tests.BaseConstraintTests.test_custom_violation_code_message.test_custom_violation_code_message constraints.tests.BaseConstraintTests.test_deconstruction.test_deconstruction constraints.tests.CheckConstraintTests.test_eq.test_eq constraints.tests.CheckConstraintTests.test_repr_with_violation_error_code.test_repr_with_violation_error_code constraints.tests.CheckConstraintTests.test_validate_custom_error.test_validate_custom_error constraints.tests.UniqueConstraintTests.test_eq.test_eq constraints.tests.UniqueConstraintTests.test_repr_with_violation_error_code.test_repr_with_violation_error_code constraints.tests.UniqueConstraintTests.test_validate_conditon_custom_error.test_validate_conditon_custom_error
+
+The list of reproduction testcases that you must pass: 
+['test_custom_violation_code_message (constraints.tests.BaseConstraintTests.test_custom_violation_code_message)', 'test_deconstruction (constraints.tests.BaseConstraintTests.test_deconstruction)', 'test_eq (constraints.tests.CheckConstraintTests.test_eq)', 'test_repr_with_violation_error_code (constraints.tests.CheckConstraintTests.test_repr_with_violation_error_code)', 'test_validate_custom_error (constraints.tests.CheckConstraintTests.test_validate_custom_error)', 'test_eq (constraints.tests.UniqueConstraintTests.test_eq)', 'test_repr_with_violation_error_code (constraints.tests.UniqueConstraintTests.test_repr_with_violation_error_code)', 'test_validate_conditon_custom_error (constraints.tests.UniqueConstraintTests.test_validate_conditon_custom_error)']

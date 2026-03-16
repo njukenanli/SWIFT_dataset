@@ -1,0 +1,66 @@
+The testcases to reproduce the problem are:
+
+===========================
+# tests/test_domain_py.py::test_info_field_list_piped_type:
+11|import re
+12|import sys
+13|from unittest.mock import Mock
+14|
+15|import pytest
+16|from docutils import nodes
+17|
+18|from sphinx import addnodes
+19|from sphinx.addnodes import (desc, desc_addname, desc_annotation, desc_content, desc_name,
+20|                             desc_optional, desc_parameter, desc_parameterlist, desc_returns,
+21|                             desc_sig_name, desc_sig_operator, desc_sig_punctuation,
+22|                             desc_signature, pending_xref)
+23|from sphinx.domains import IndexEntry
+24|from sphinx.domains.python import (PythonDomain, PythonModuleIndex, _parse_annotation,
+25|                                   _pseudo_parse_arglist, py_sig_re)
+26|from sphinx.testing import restructuredtext
+27|from sphinx.testing.util import assert_node
+28|
+......
+30|def parse(sig):
+31|    m = py_sig_re.match(sig)
+32|    if m is None:
+33|        raise ValueError
+34|    name_prefix, name, arglist, retann = m.groups()
+35|    signode = addnodes.desc_signature(sig, '')
+36|    _pseudo_parse_arglist(signode, arglist)
+37|    return signode.astext()
+......
+1012|def test_info_field_list_piped_type(app):
+1013|    text = (".. py:module:: example\n"
+1014|            ".. py:class:: Class\n"
+1015|            "\n"
+1016|            "   :param age: blah blah\n"
+1017|            "   :type age: int | str\n")
+1018|    doctree = restructuredtext.parse(app, text)
+1019|
+1020|    assert_node(doctree,
+1021|                (nodes.target,
+1022|                 addnodes.index,
+1023|                 addnodes.index,
+1024|                 [desc, ([desc_signature, ([desc_annotation, "class "],
+1025|                                           [desc_addname, "example."],
+1026|                                           [desc_name, "Class"])],
+1027|                         [desc_content, nodes.field_list, nodes.field, (nodes.field_name,
+1028|                                                                        nodes.field_body)])]))
+1029|    assert_node(doctree[3][1][0][0][1],
+1030|                ([nodes.paragraph, ([addnodes.literal_strong, "age"],
+1031|                                    " (",
+1032|                                    [pending_xref, addnodes.literal_emphasis, "int"],
+1033|                                    [addnodes.literal_emphasis, " | "],
+1034|                                    [pending_xref, addnodes.literal_emphasis, "str"],
+1035|                                    ")",
+1036|                                    " -- ",
+1037|                                    "blah blah")],))
+1038|    assert_node(doctree[3][1][0][0][1][0][2], pending_xref,
+1039|                refdomain="py", reftype="class", reftarget="int",
+1040|                **{"py:module": "example", "py:class": "Class"})
+1041|    assert_node(doctree[3][1][0][0][1][0][4], pending_xref,
+1042|                refdomain="py", reftype="class", reftarget="str",
+1043|                **{"py:module": "example", "py:class": "Class"})
+
+===========================

@@ -25,7 +25,7 @@ def main() -> None:
     for file in [
         "/testbed/answer.json",
         "/testbed/reproduction.py",
-        "/testbed/reproduction.go"
+        "/testbed/reproduction_test.go"
     ]:
         if os.path.exists(file):
             target_file = file
@@ -42,13 +42,14 @@ def main() -> None:
                 try: 
                     json.loads(file_content)
                     message = f"This is your submission: \n{file_content}\nEnsure it's correct. If correct, submit again. If not, go back to explore and modify your submission file."
-                except: 
-                    message = "Your submission /testbed/answer.json has JSON DECODE ERROR, please fix your /testbed/answer.json"
+                    registry["SUBMIT_STAGE"] = current_stage + 1
+                except Exception as e: 
+                    message = f"Your submission /testbed/answer.json:\n{file_content}\n raises JSON DECODE ERROR {e}, please fix your /testbed/answer.json"
             else:
                 message = f"This is your submission: \n{file_content}\nEnsure it's correct. If correct, submit again. If not, go back to explore and modify your submission file."
+                registry["SUBMIT_STAGE"] = current_stage + 1
         else:
             message = f"The file to submit your answer \n{target_file}\n is empty. Please write your answer to this file. If you haven't finished, go back to explore."
-        registry["SUBMIT_STAGE"] = current_stage + 1
         print(message)
         sys.exit(0)
 

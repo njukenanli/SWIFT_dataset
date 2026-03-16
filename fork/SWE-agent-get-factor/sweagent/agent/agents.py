@@ -567,6 +567,13 @@ class DefaultAgent(AbstractAgent):
     def get_instructions(self):
         instance = self._problem_statement.extra_fields["instance"]
         lang = instance.get("repo_language", "python").strip().lower()
+        if self.ablation.get("reproduction", False):
+            if lang == "python":
+                self.target_file = "/testbed/reproduction.py"
+            elif lang == "go":
+                self.target_file = "/testbed/reproduction_test.go"
+        else:
+            self.target_file = "/testbed/answer.json"
 
         if self.ablation.get("location", False):
             with open("examples/location/0.json") as f:
@@ -636,19 +643,25 @@ Once you have completed /testbed/answer.json, submit.
             self._env.communicate("touch /testbed/answer.json")
 
         if self.ablation.get("reproduction", False):
+            target_file = self.target_file
             if lang == "python":
-                target_file = "/testbed/reproduction.py"
+                target_func = ""
+                cmd = "cd /testbed/ && python reproduction.py"
             elif lang == "go":
-                target_file = "/testbed/reproduction.go"
+                target_func = "The entry of your test file should be func TestReproduce(t *testing.T) "
+                cmd = "cd /testbed/ && go test -run TestReproduce -v"
             message = f"""
 You need to write a reproduction test file to help your colleague reproduce the issue.
 Your reproduction file, when executed, should exactly reveal the issue in the issue description.
 Your reproduction file should fail before the issue is resolved and should pass after the issue is correctly fixed.
 Your should write multiple testcases in the reproduction file to cover all corner cases to ensure all cases are resolved correclty.
 Your reproduction file should be written in {target_file}
+{target_func}
 We will only extract contents in {target_file} to check the correctness of your reproduction. Don't write anything elsewhere.
+Your reproduction test file should be run with `{cmd}`
+After you write the reproduction test file, run it with `{cmd}` to confirm it can reproduce the issue in the description.
 You don't need to edit the source codes. 
-Once you finish {target_file}, submit.
+Once you have run the {target_file} to confirm it can reproduce the issue, submit.
             """
             # git --no-pager diff --no-index /dev/null reproduction.py
             history_item: dict[str, Any] = {
@@ -1283,13 +1296,54 @@ Once you have completed /testbed/answer.json, submit.
             step.observation = "Exited (autosubmitted)"
         return step
 
+    def ensure_submission(self):
+        if self.model.config.per_instance_call_limit - self.model.stats.api_calls <= 8:
+            self.model.stats.api_calls -= 8
+
+        target_file = self.target_file
+        for trial in range(6):
+            self._env.communicate(f"touch {target_file}")
+            answer = self._env.read_file(target_file, encoding="utf-8", errors="backslashreplace")
+            if not answer.strip():
+                prompt = f"Max step limit has reached but your answer file {target_file} is still empty. You must write your answer into this file even you are not sure!"
+                self.logger.info(prompt)
+                self._append_history(
+                    {
+                        "role": "user",
+                        "content": prompt,
+                        "agent": self.name,
+                        "message_type": "observation",
+                    }
+                )
+                step_output = self.forward_with_handling(self.messages)
+                self.add_step_to_history(step_output)
+                continue
+            elif not self.ablation.get("reproduction", False):
+                try:
+                    json.loads(answer)
+                except Exception as e:
+                    prompt = f"Your submission in {target_file}:\n{answer}\nraises JSON DECODE ERROR {e}! Fix your submission!"
+                    self.logger.info(prompt)
+                    self._append_history(
+                        {
+                            "role": "user",
+                            "content": prompt,
+                            "agent": self.name,
+                            "message_type": "observation",
+                        }
+                    )
+                    step_output = self.forward_with_handling(self.messages)
+                    self.add_step_to_history(step_output)
+                    continue
+            break
+    
     def get_submission(self) -> str:
         if self.ablation.get("reproduction", False):
             lang = self._problem_statement.extra_fields["instance"].get("repo_language", "python").strip().lower()
             if lang == "python":
-                submission = self._env.communicate("touch /testbed/reproduction.py && git --no-pager diff --no-index /dev/null /testbed/reproduction.py")
+                submission = self._env.communicate("touch /testbed/reproduction.py && cd /testbed && git --no-pager diff --no-index /dev/null reproduction.py")
             elif lang == "go":
-                submission = self._env.communicate("touch /testbed/reproduction.go && git --no-pager diff --no-index /dev/null /testbed/reproduction.go")
+                submission = self._env.communicate("touch /testbed/reproduction_test.go && cd /testbed && git --no-pager diff --no-index /dev/null reproduction_test.go")
         else:
             try:
                 self._env.communicate("touch /testbed/answer.json")
@@ -1314,6 +1368,7 @@ Once you have completed /testbed/answer.json, submit.
         is_submission = self.tools.check_for_submission_cmd(observation or step.observation)
         if is_submission or force_submission:
             assert self._env is not None
+            self.ensure_submission()
             submission = self.get_submission()
             if submission.strip() != "":
                 step.submission = submission
@@ -1398,6 +1453,9 @@ Once you have completed /testbed/answer.json, submit.
             )
             if len(step.observation) > 100000:
                 step.observation = step.observation[:50000] + "\n...... truncated due to laength ......\n" + step.observation[-50000:]
+            steps_left = self.model.config.per_instance_call_limit - self.model.stats.api_calls
+            if steps_left <= 4:
+                step.observation += f"Note you have only {steps_left} steps left to reach cost limit, please save your answer to {self.target_file} as soon as possible." 
         except CommandTimeoutError:
             self._n_consecutive_timeouts += 1
             if self._n_consecutive_timeouts >= self.tools.config.max_consecutive_execution_timeouts:

@@ -1,0 +1,98 @@
+[
+ [
+  [
+   "/usr/local/go/src/runtime/asm_amd64.s",
+   1700,
+   "runtime.goexit",
+   ""
+  ],
+  [
+   "/usr/local/go/src/testing/testing.go",
+   1792,
+   "testing.tRunner",
+   ""
+  ],
+  [
+   "/app/internal/config/config_test.go",
+   1061,
+   "go.flipt.io/flipt/internal/config.TestLoad",
+   "\t\t\texpected = tt.expected()"
+  ],
+  [
+   "/app/internal/config/config.go",
+   493,
+   "go.flipt.io/flipt/internal/config.Default",
+   "L478: \t\t\treturn []string{}, nil\nL479: \t\t}\nL480: \nL481: \t\treturn strings.Fields(raw), nil\nL482: \t}\nL483: }\nL484: \nL485: // Default is the base config used when no configuration is explicit provided.\nL486: func Default() *Config {\nL487: \tdbRoot, err := defaultDatabaseRoot()\nL488: \tif err != nil {\nL489: \t\tpanic(err)\nL490: \t}\nL491: \nL492: \tdbPath := filepath.ToSlash(filepath.Join(dbRoot, \"flipt.db\"))\nL493: \t__ablationTraceHit(\"/app/internal/config/config.go\", 559)\nL494: \t__ablationTraceHit(\"/app/internal/config/config.go\", 560)\nL495: \t__ablationTraceHit(\"/app/internal/config/config.go\", 561)\nL496: \t__ablationTraceHit(\"/app/internal/config/config.go\", 562)\nL497: \t__ablationTraceHit(\"/app/internal/config/config.go\", 563)\nL498: \t__ablationTraceHit(\"/app/internal/config/config.go\", 564)\nL499: \t__ablationTraceHit(\"/app/internal/config/config.go\", 565)\nL500: \nL501: \treturn &Config{\nL502: \t\tLog: LogConfig{\nL503: \t\t\tLevel:     \"INFO\",\nL504: \t\t\tEncoding:  LogEncodingConsole,\nL505: \t\t\tGRPCLevel: \"ERROR\",\nL506: \t\t\tKeys: LogKeys{\nL507: \t\t\t\tTime:    \"T\",\nL508: \t\t\t\tLevel:   \"L\","
+  ]
+ ],
+ [
+  [
+   "/usr/local/go/src/runtime/asm_amd64.s",
+   1700,
+   "runtime.goexit",
+   ""
+  ],
+  [
+   "/usr/local/go/src/testing/testing.go",
+   1792,
+   "testing.tRunner",
+   ""
+  ],
+  [
+   "/app/internal/config/config_test.go",
+   1080,
+   "go.flipt.io/flipt/internal/config.TestLoad.func29",
+   "\t\t\tres, err := Load(path)"
+  ],
+  [
+   "/app/internal/config/config.go",
+   187,
+   "go.flipt.io/flipt/internal/config.Load",
+   "L172: \nL173: \t\tfield := val.Field(i).Addr().Interface()\nL174: \t\tf(field)\nL175: \t}\nL176: \nL177: \t// run any deprecations checks\nL178: \tfor _, deprecator := range deprecators {\nL179: \t\twarnings := deprecator.deprecations(v)\nL180: \t\tfor _, warning := range warnings {\nL181: \t\t\tresult.Warnings = append(result.Warnings, warning.Message())\nL182: \t\t}\nL183: \t}\nL184: \nL185: \t// run any defaulters\nL186: \tfor _, defaulter := range defaulters {\nL187: \t\tif err := defaulter.setDefaults(v); err != nil {\nL188: \t\t\treturn nil, err\nL189: \t\t}\nL190: \t}\nL191: \nL192: \tif err := v.Unmarshal(cfg, viper.DecodeHook(\nL193: \t\tmapstructure.ComposeDecodeHookFunc(\nL194: \t\t\tappend(DecodeHooks, experimentalFieldSkipHookFunc(skippedTypes...))...,\nL195: \t\t),\nL196: \t)); err != nil {\nL197: \t\treturn nil, err\nL198: \t}\nL199: \nL200: \t// run any validation steps\nL201: \tfor _, validator := range validators {\nL202: \t\tif err := validator.validate(); err != nil {"
+  ],
+  [
+   "/app/internal/config/tracing.go",
+   27,
+   "go.flipt.io/flipt/internal/config.(*TracingConfig).setDefaults",
+   "L12: var _ defaulter = (*TracingConfig)(nil)\nL13: \nL14: // TracingConfig contains fields, which configure tracing telemetry\nL15: // output destinations.\nL16: type TracingConfig struct {\nL17: \tEnabled       bool                `json:\"enabled\" mapstructure:\"enabled\" yaml:\"enabled\"`\nL18: \tExporter      TracingExporter     `json:\"exporter,omitempty\" mapstructure:\"exporter\" yaml:\"exporter,omitempty\"`\nL19: \tPropagators   []TracingPropagator `json:\"propagators,omitempty\" mapstructure:\"propagators\" yaml:\"propagators,omitempty\"`\nL20: \tSamplingRatio float64             `json:\"samplingRatio,omitempty\" mapstructure:\"samplingRatio\" yaml:\"samplingRatio,omitempty\"`\nL21: \tJaeger        JaegerTracingConfig `json:\"jaeger,omitempty\" mapstructure:\"jaeger\" yaml:\"jaeger,omitempty\"`\nL22: \tZipkin        ZipkinTracingConfig `json:\"zipkin,omitempty\" mapstructure:\"zipkin\" yaml:\"zipkin,omitempty\"`\nL23: \tOTLP          OTLPTracingConfig   `json:\"otlp,omitempty\" mapstructure:\"otlp\" yaml:\"otlp,omitempty\"`\nL24: }\nL25: \nL26: func (c *TracingConfig) setDefaults(v *viper.Viper) error {\nL27: \t__ablationTraceHit(\"/app/internal/config/tracing.go\", 28)\nL28: \t__ablationTraceHit(\"/app/internal/config/tracing.go\", 29)\nL29: \t__ablationTraceHit(\"/app/internal/config/tracing.go\", 30)\nL30: \t__ablationTraceHit(\"/app/internal/config/tracing.go\", 31)\nL31: \t__ablationTraceHit(\"/app/internal/config/tracing.go\", 32)\nL32: \t__ablationTraceHit(\"/app/internal/config/tracing.go\", 33)\nL33: \t__ablationTraceHit(\"/app/internal/config/tracing.go\", 34)\nL34: \tv.SetDefault(\"tracing\", map[string]any{\nL35: \t\t\"enabled\":       false,\nL36: \t\t\"exporter\":      TracingJaeger,\nL37: \t\t\"samplingRatio\": 1,\nL38: \t\t\"propagators\": []TracingPropagator{\nL39: \t\t\tTracingPropagatorTraceContext,\nL40: \t\t\tTracingPropagatorBaggage,\nL41: \t\t},\nL42: \t\t\"jaeger\": map[string]any{"
+  ]
+ ],
+ [
+  [
+   "/usr/local/go/src/runtime/asm_amd64.s",
+   1700,
+   "runtime.goexit",
+   ""
+  ],
+  [
+   "/usr/local/go/src/testing/testing.go",
+   1792,
+   "testing.tRunner",
+   ""
+  ],
+  [
+   "/app/internal/config/config_test.go",
+   1080,
+   "go.flipt.io/flipt/internal/config.TestLoad.func29",
+   "\t\t\tres, err := Load(path)"
+  ],
+  [
+   "/app/internal/config/config.go",
+   202,
+   "go.flipt.io/flipt/internal/config.Load",
+   "L187: \t\tif err := defaulter.setDefaults(v); err != nil {\nL188: \t\t\treturn nil, err\nL189: \t\t}\nL190: \t}\nL191: \nL192: \tif err := v.Unmarshal(cfg, viper.DecodeHook(\nL193: \t\tmapstructure.ComposeDecodeHookFunc(\nL194: \t\t\tappend(DecodeHooks, experimentalFieldSkipHookFunc(skippedTypes...))...,\nL195: \t\t),\nL196: \t)); err != nil {\nL197: \t\treturn nil, err\nL198: \t}\nL199: \nL200: \t// run any validation steps\nL201: \tfor _, validator := range validators {\nL202: \t\tif err := validator.validate(); err != nil {\nL203: \t\t\treturn nil, err\nL204: \t\t}\nL205: \t}\nL206: \nL207: \treturn result, nil\nL208: }\nL209: \nL210: // getConfigFile provides a file from different type of storage.\nL211: func getConfigFile(ctx context.Context, path string) (fs.File, error) {\nL212: \tu, err := url.Parse(path)\nL213: \tif err != nil {\nL214: \t\treturn nil, err\nL215: \t}\nL216: \nL217: \tif slices.Contains(object.SupportedSchemes(), u.Scheme) {"
+  ],
+  [
+   "/app/internal/config/tracing.go",
+   71,
+   "go.flipt.io/flipt/internal/config.(*TracingConfig).validate",
+   "L56: \nL57: func (c *TracingConfig) validate() error {\nL58: \t__ablationTraceHit(\"/app/internal/config/tracing.go\", 51)\nL59: \t__ablationTraceHit(\"/app/internal/config/tracing.go\", 52)\nL60: \t__ablationTraceHit(\"/app/internal/config/tracing.go\", 53)\nL61: \tif c.SamplingRatio < 0 || c.SamplingRatio > 1 {\nL62: \t\treturn errors.New(\"sampling ratio should be a number between 0 and 1\")\nL63: \t}\nL64: \t__ablationTraceHit(\"/app/internal/config/tracing.go\", 55)\nL65: \t__ablationTraceHit(\"/app/internal/config/tracing.go\", 56)\nL66: \t__ablationTraceHit(\"/app/internal/config/tracing.go\", 57)\nL67: \t__ablationTraceHit(\"/app/internal/config/tracing.go\", 58)\nL68: \t__ablationTraceHit(\"/app/internal/config/tracing.go\", 59)\nL69: \nL70: \tfor _, propagator := range c.Propagators {\nL71: \t\tif !propagator.isValid() {\nL72: \t\t\treturn fmt.Errorf(\"invalid propagator option: %s\", propagator)\nL73: \t\t}\nL74: \t}\nL75: \t__ablationTraceHit(\"/app/internal/config/tracing.go\", 61)\nL76: \nL77: \treturn nil\nL78: }\nL79: \nL80: func (c *TracingConfig) deprecations(v *viper.Viper) []deprecated {\nL81: \tvar deprecations []deprecated\nL82: \nL83: \tif v.GetString(\"tracing.exporter\") == TracingJaeger.String() && v.GetBool(\"tracing.enabled\") {\nL84: \t\tdeprecations = append(deprecations, \"tracing.exporter.jaeger\")\nL85: \t}\nL86: "
+  ],
+  [
+   "/app/internal/config/tracing.go",
+   150,
+   "go.flipt.io/flipt/internal/config.TracingPropagator.isValid",
+   "L135: \nL136: type TracingPropagator string\nL137: \nL138: const (\nL139: \tTracingPropagatorTraceContext TracingPropagator = \"tracecontext\"\nL140: \tTracingPropagatorBaggage      TracingPropagator = \"baggage\"\nL141: \tTracingPropagatorB3           TracingPropagator = \"b3\"\nL142: \tTracingPropagatorB3Multi      TracingPropagator = \"b3multi\"\nL143: \tTracingPropagatorJaeger       TracingPropagator = \"jaeger\"\nL144: \tTracingPropagatorXRay         TracingPropagator = \"xray\"\nL145: \tTracingPropagatorOtTrace      TracingPropagator = \"ottrace\"\nL146: \tTracingPropagatorNone         TracingPropagator = \"none\"\nL147: )\nL148: \nL149: func (t TracingPropagator) isValid() bool {\nL150: \t__ablationTraceHit(\"/app/internal/config/tracing.go\", 134)\nL151: \t__ablationTraceHit(\"/app/internal/config/tracing.go\", 135)\nL152: \t__ablationTraceHit(\"/app/internal/config/tracing.go\", 136)\nL153: \t__ablationTraceHit(\"/app/internal/config/tracing.go\", 137)\nL154: \t__ablationTraceHit(\"/app/internal/config/tracing.go\", 138)\nL155: \t__ablationTraceHit(\"/app/internal/config/tracing.go\", 139)\nL156: \t__ablationTraceHit(\"/app/internal/config/tracing.go\",\nL157: \nL158: \t\t// JaegerTracingConfig contains fields, which configure\nL159: \t\t// Jaeger span and tracing output destination.\nL160: \t\t140)\nL161: \t__ablationTraceHit(\"/app/internal/config/tracing.go\", 141)\nL162: \t__ablationTraceHit(\"/app/internal/config/tracing.go\", 142)\nL163: \t__ablationTraceHit(\"/app/internal/config/tracing.go\", 143)\nL164: \tvalidOptions := map[TracingPropagator]bool{\nL165: \t\tTracingPropagatorTraceContext: true,"
+  ]
+ ]
+]

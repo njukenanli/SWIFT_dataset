@@ -1,0 +1,44 @@
+{
+    "sphinx/domains/python.py": [  
+        {
+            "file of api definition": "/testbed/sphinx/domains/python.py",
+            "lineno of api definition": [92, 111],
+            "api function name": "unparse",
+            "api function should be called in this way": "unparse(elem)",
+            "the approximate lineno where this api appear in the file you need to modify": 111,
+            "api function definition": "def _parse_annotation(annotation: str) -> List[Node]:\n    \"\"\"Parse type annotation.\"\"\"\n    def make_xref(text: str) -> addnodes.pending_xref:\n        if text == 'None':\n            reftype = 'obj'\n        else:\n            reftype = 'class'\n\n        return pending_xref('', nodes.Text(text),\n                            refdomain='py', reftype=reftype, reftarget=text)\n\n    def unparse(node: ast.AST) -> List[Node]:\n        if isinstance(node, ast.Attribute):\n            return [nodes.Text(\"%s.%s\" % (unparse(node.value)[0], node.attr))]\n        elif isinstance(node, ast.Expr):\n            return unparse(node.value)\n        elif isinstance(node, ast.Index):\n            return unparse(node.value)\n        elif isinstance(node, ast.List):\n            result = [addnodes.desc_sig_punctuation('', '[')]  # type: List[Node]\n            for elem in node.elts:\n                result.extend(unparse(elem))\n                result.append(addnodes.desc_sig_punctuation('', ', '))\n            result.pop()\n            result.append(addnodes.desc_sig_punctuation('', ']'))\n            return result\n        elif isinstance(node, ast.Module):\n            return sum((unparse(e) for e in node.body), [])\n        elif isinstance(node, ast.Name):\n            return [nodes.Text(node.id)]\n        elif isinstance(node, ast.Subscript):\n            result = unparse(node.value)\n            result.append(addnodes.desc_sig_punctuation('', '['))\n            result.extend(unparse(node.slice))\n            result.append(addnodes.desc_sig_punctuation('', ']'))\n            return result\n        elif isinstance(node, ast.Tuple):\n            if node.elts:\n                result = []\n                for elem in node.elts:\n                    result.extend(unparse(elem))\n                    result.append(addnodes.desc_sig_punctuation('', ', '))\n                result.pop()\n            else:\n                result = [addnodes.desc_sig_punctuation('', '('),\n                          addnodes.desc_sig_punctuation('', ')')]\n\n            return result\n        else:\n            raise SyntaxError  # unsupported syntax\n\n    try:\n        tree = ast_parse(annotation)\n        result = unparse(tree)\n        for i, node in enumerate(result):\n            if isinstance(node, nodes.Text):\n                result[i] = make_xref(str(node))\n        return result\n    except SyntaxError:\n        return [make_xref(annotation)]"
+        },
+        {
+            "file of api definition": "/opt/miniconda3/envs/testbed/lib/python3.9/site-packages/docutils/nodes.py",
+            "lineno of api definition": [692, 692],
+            "api function name": "append",
+            "api function should be called in this way": "result.append(addnodes.desc_sig_punctuation('', ', '))",
+            "the approximate lineno where this api appear in the file you need to modify": 112,
+            "api function definition": "class Element(Node):\n......\n    def append(self, item):\n        self.setup_child(item)\n        self.children.append(item)"
+        }
+    ],
+    "sphinx/ext/autodoc/__init__.py": [
+        {
+            "file of api definition": "/testbed/sphinx/util/inspect.py",
+            "lineno of api definition": [
+                393,
+                398
+            ],
+            "api function name": "isproperty",
+            "api function should be called in this way": "inspect.isproperty(member)",
+            "the approximate lineno where this api appear in the file you need to modify": 2665,
+            "api function definition": "def isproperty(obj: Any) -> bool:\n    \"\"\"Check if the object is property.\"\"\"\n    if sys.version_info >= (3, 8):\n        from functools import cached_property  # cached_property is available since py3.8\n        if isinstance(obj, cached_property):\n            return True\n\n    return isinstance(obj, property)"
+        },
+        {
+            "file of api definition": "/testbed/sphinx/events.py",
+            "lineno of api definition": [
+                89,
+                89
+            ],
+            "api function name": "emit",
+            "api function should be called in this way": "self.env.app.events.emit(\"source-read\", docname, arg)",
+            "the approximate lineno where this api appear in the file you need to modify": 392,
+            "api function definition": "class EventManager:\n......\n    def emit(self, name: str, *args: Any,\n             allowed_exceptions: tuple[type[Exception], ...] = ()) -> list:\n        \"\"\"Emit a Sphinx event.\"\"\"\n\n        # not every object likes to be repr()'d (think\n        # random stuff coming via autodoc)\n        with contextlib.suppress(Exception):\n            logger.debug('[app] emitting event: %r%s', name, repr(args)[:100])\n\n        results = []\n        listeners = sorted(self.listeners[name], key=attrgetter(\"priority\"))\n        for listener in listeners:\n            try:\n                results.append(listener.handler(self.app, *args))\n            except allowed_exceptions:\n                # pass through the errors specified as *allowed_exceptions*\n                raise\n            except SphinxError:\n                raise\n            except Exception as exc:\n                if self.app.pdb:\n                    # Just pass through the error, so that it can be debugged.\n                    raise\n                modname = safe_getattr(listener.handler, '__module__', None)\n                raise ExtensionError(__(\"Handler %r for event %r threw an exception\") %\n                                     (listener.handler, name), exc, modname=modname) from exc\n        return results"
+        }
+    ]
+}

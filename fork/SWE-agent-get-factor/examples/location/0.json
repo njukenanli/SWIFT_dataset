@@ -1,0 +1,10 @@
+{
+ "file path 1 that needs to be edited": {
+  "line_ranges": [[4, 9], [18, 35]],
+  "code_snippets": "The original code snippets that need to be edited."
+ },
+ "file path 2 that needs to be edited": {
+  "line_ranges": ["line ranges where the codes need to be edited"],
+  "code_snippets": "The original code snippets that need to be edited."
+ }
+}

@@ -1,0 +1,5 @@
+{
+    "command": "regression test command to specify the tests that test the locations related to issue description",
+    "pass": ["list of testcases passed"],
+    "fail": ["list of testcases failed"]
+}

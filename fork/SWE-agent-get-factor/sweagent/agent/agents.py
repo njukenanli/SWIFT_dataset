@@ -1453,8 +1453,8 @@ Once you have completed /testbed/answer.json, submit.
             )
             if len(step.observation) > 100000:
                 step.observation = step.observation[:50000] + "\n...... truncated due to laength ......\n" + step.observation[-50000:]
-            steps_left = self.model.config.per_instance_call_limit - self.model.stats.api_calls
-            if steps_left <= 4:
+            steps_left = self.model.config.per_instance_call_limit - self.model.stats.api_calls - 1
+            if steps_left <= 5:
                 step.observation += f"Note you have only {steps_left} steps left to reach cost limit, please save your answer to {self.target_file} as soon as possible." 
         except CommandTimeoutError:
             self._n_consecutive_timeouts += 1

@@ -6,7 +6,7 @@ agent:
     name: 'claude-sonnet-4-6'
     per_instance_cost_limit: 0
     total_cost_limit: 0
-    per_instance_call_limit: 60
+    per_instance_call_limit: 70
     max_input_tokens: 0
     temperature: 0.0
     top_p: 1.0

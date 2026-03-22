@@ -4,6 +4,7 @@ import asyncio
 import copy
 import json
 import logging
+import shlex
 import time
 from pathlib import Path, PurePosixPath
 from typing import Annotated, Any, Literal
@@ -655,7 +656,7 @@ You need to write a reproduction test file to help your colleague reproduce the 
 Your reproduction file, when executed, should exactly reveal the issue in the issue description.
 Your reproduction file should fail before the issue is resolved and should pass after the issue is correctly fixed.
 Your should write multiple testcases in the reproduction file to cover all corner cases to ensure all cases are resolved correclty.
-Your reproduction file should be written in {target_file}
+Your reproduction file should be written in {target_file} using `str_replace_editor create`
 {target_func}
 We will only extract contents in {target_file} to check the correctness of your reproduction. Don't write anything elsewhere.
 Your reproduction test file should be run with `{cmd}`
@@ -680,7 +681,9 @@ Once you have run the {target_file} to confirm it can reproduce the issue, submi
             with open("examples/api/2.json") as f:
                 ex2 = f.read()
             message = f"""
-You need to find all the API functions that need to be used to edit the code to resolve the issue, or the API functions that are used around the locations that need to be edited.
+You need to find:
+    1) all the API functions that need to be used to edit the code to resolve the issue;
+    2) the important API functions that are used around the locations to be edited which can help understand how to edit the code.
 These API functions are crucial for understanding how to edit the code and avoiding implementing existing utilities again.
 You need to determine where the API functions are used / will be used for editing the source code, and find the definition of these API functions.
 You may need to locate the suspicous locations that might need to be edited to resolve the issue first, before you can discover the necessary API functions to help understand / edit these locations.
@@ -709,7 +712,6 @@ Once you have completed /testbed/answer.json, submit.
                 ex = f.read()
             message = f"""
 You need to find the locations relevant to the issue description, not limited to the locations to be edited, for your colleague.
-Include both the suspicous locations that may need to be edited, and the code contexts related to these locations to be edited, which may affect the locations to be edited or the edited locations may affect in your answer.
 Organize the relations of potentially relevant locations you find into function call stacks.
 You answer should be written into /testbed/answer.json
 We will check the correctness of your answer by reading /testbed/answer.json
@@ -727,6 +729,12 @@ where a calls b, and b calls c.
 
 For example,
 {ex}
+
+Requirements:
+    (1) Include both the suspicous locations that may need to be edited, and the code contexts related to these locations to be edited, which may affect the locations to be edited or the edited locations may affect, in your final answer.
+    (2) Some relevant locations could be found by error stack trace of running issue reproduction test code -- this is the most optimistic cases. You can try to use this way first to get the answer stacks. 
+    (3) For problems that cannot be located with error stack of running issue reproduction test code, find a) the locations to be edited first and then find b) the functions which call these edit locations and these edit locations call. Organize the function call relations of BOTH a AND b into stacks.
+    (4) Organize the relations of potentially relevant locations you find into list of function call stacks.
 
 You don't need to edit the source codes. 
 Once you have completed /testbed/answer.json, submit.
@@ -763,15 +771,14 @@ Once you have completed /testbed/answer.json, submit.
                 check="raise",
             )
         if self.ablation.get("location", False):
-            message = "Your colleague has found all the locations that should be edited to resolve the issue:\n"
+            message = "Your colleague has found the suspicious locations that should be edited to resolve the issue:\n"
             for k, v in gt["location_content"].items():
                 message += f"\n===========================\n# {k.strip()}:\n{v}\n"
             message += "\n===========================\n"
-            message += "Your colleague has determined that only these locations should be edited.\n"
-            message += "You must edit all of these locations one by one:\n"
+            message += "You must follow your colleague's advice to edit the suggested locations first.\n"
+            message += "You must first inspect and try to edit all of these locations one by one:\n"
             message += json.dumps(gt["location"], indent = True) + "\n"
-            message += "You must not edit any locations not listed here.\n"
-            message += "As your colleagues have done the localization step for you, you don't need to do this step again. You can of course view other contexts relevant to these buggy locations to understand the source codes better. But locations not listed here should not be edited!"
+            message += "If you find after editing these locations the reproduce test still fails, you can of course consider other code contexts relevant to the issue description. But you must first try to edit the locations specified by your colleague!"
             history_item: dict[str, Any] = {
                 "role": "user",
                 "content": message,
@@ -893,11 +900,11 @@ Once you have completed /testbed/answer.json, submit.
             self._append_history(history_item)
 
         if self.ablation.get("api", False) and gt["api"]:
-            message = "Hints: Your colleague has listed the functions you need to use to edit the source code.\n"
+            message = "Hints: Your colleague has listed the important functions which you may need to use to edit the source code or may help you understand the key locations in the source code.\n"
             message += 'The function information format is a mapping: Dict [ "the path of the file you need to edit" : List [ "the information of each function you need to use to edit this file" ] ] \n'
             message += json.dumps(gt["api"], indent=True) + "\n"
-            message += 'You need to use ALL of the function calls listed above. You need to use the exactly same arguments in the "api function should be called in this way" field in each piece of function information to use each function.\n'
-            message += "You can go to find the function definition of these functions you need to use to understand these functions better. Some of the function information has best-guess function definition from our development tools, but may not be accurate, so you need to judge and find the correct function definition yourself.\n"
+            message += 'Try to use ALL of the function calls listed above to edit the source code in the ways suggested by your colleague.\n'
+            message += "You can go to find the function definition of these functions you need to use to understand these functions better.  If you think the utilities suggested by your colleague are not enough to edit the source code, you can of course find the API / function utilities to help you understand / edit key target locations by yourself.\n"
             history_item: dict[str, Any] = {
                 "role": "user",
                 "content": message,
@@ -939,7 +946,7 @@ Once you have completed /testbed/answer.json, submit.
                     )
         elif self.ablation.get("location", False):
             user_requirement = ("Following your colleagues' contributions, your next steps should be:\n"
-                       "1) Explore the source codes if you want to understand the contexts of the buggy locations or testcases better. But remember that all the locations that need to edited have been listed above.\n"
+                       "1) Explore the source codes if you want to understand the contexts of the buggy locations or testcases better. But remember that you must edit the locations suggested by your colleague first to see if it works!\n"
                        "2) Create a script to reproduce the problem and execute it with `python <filename.py>` using the bash tool, to confirm the problem.\n"
                        "3) Edit all the locations specified by your colleagues to resolve the issue.\n"
                        "4) Run your reproduction script to validate your fix. Due to time limit, do not run the regression tests in the repository. If the reproduction script still fails, go back to explore and edit again.\n"
@@ -949,7 +956,7 @@ Once you have completed /testbed/answer.json, submit.
             user_requirement = ("Following your colleagues' contributions, your next steps should be:\n"
                        "1) As a first step, it might be a good idea to find and read code relevant to the <pr_description>. \n"
                        "2) Edit the codes to resolve the issue.\n"
-                       "3) Run reproduction tests to validate your fix. Due to time limit, do not run the regression tests in the repository. If any of the reproduction testcases listed above fails, go back to explore and edit again.\n"
+                       "3) Run reproduction tests provided by your colleague to validate your fix. Due to time limit, do not run the regression tests in the repository. If any of the reproduction testcases listed above fails, go back to explore and edit again.\n"
                        "4) If you pass ALL the reproduction tests, submit.\n"
                     )
         elif self.ablation.get("regression", False):
@@ -1031,7 +1038,12 @@ Once you have completed /testbed/answer.json, submit.
             self.logger.warning(f"get_state timed out during setup: {e}. Using empty state.")
             state = {}
         self.add_instance_template_to_history(state=state)
-        self.get_instructions()
+        if self.ablation.get("solve", False):
+            self.logger.info("solve mode")
+            self.prepare_gt()
+        else:
+            self.logger.info("get factor mode")
+            self.get_instructions()
         self._chook.on_setup_done()
 
     def add_system_message_to_history(self) -> None:
@@ -1415,6 +1427,34 @@ Once you have completed /testbed/answer.json, submit.
             out[f"edited_files{context_length}"] = value
         return out
 
+    def _cut_long_create(self, cmd: str) -> tuple[str,list[str]]:
+        parts = shlex.split(cmd)
+        if len(parts) < 5 or parts[0] != "str_replace_editor" or parts[1] != "create":
+            msg = f"Unexpected create command format: {cmd!r}"
+            raise ValueError(msg)
+        path = parts[2]
+        try:
+            file_text_idx = parts.index("--file_text")
+        except ValueError as e:
+            msg = f"Missing --file_text in create command: {cmd!r}"
+            raise ValueError(msg) from e
+        if file_text_idx + 1 >= len(parts):
+            msg = f"Missing value for --file_text in create command: {cmd!r}"
+            raise ValueError(msg)
+        content = parts[file_text_idx + 1]
+        cmd_list = []
+        for start in range(0, len(content), 1500):
+            chunk = shlex.quote(content[start : start + 1500])
+            quoted_path = shlex.quote(path)
+            if start == 0:
+                cmd_list.append(f"str_replace_editor create {quoted_path} --file_text {chunk}")
+            else:
+                cmd_list.append(f"str_replace_editor append {quoted_path} --file_text {chunk}")
+        for i in cmd_list:
+            self.logger.info(i)
+        return (path, cmd_list)
+
+    
     def handle_action(self, step: StepOutput) -> StepOutput:
         """Runs an action proposed by the agent in the environment and returns the corresponding output.
 
@@ -1444,18 +1484,38 @@ Once you have completed /testbed/answer.json, submit.
         assert self._env is not None
         self._chook.on_action_started(step=step)
         execution_t0 = time.perf_counter()
-        run_action: str = self.tools.guard_multiline_input(step.action).strip()
         try:
-            step.observation = self._env.communicate(
-                input=run_action,
-                timeout=max(self.tools.config.execution_timeout, 1800),
-                check="raise" if self._always_require_zero_exit_code else "ignore",
-            )
+            if ("str_replace_editor create" in step.action) and (len(step.action) > 2000):
+                fpath, cmd_list = self._cut_long_create(step.action)
+                step.observation = f"File created successfully at {fpath}. Current file content is:\n"
+                for cmd in cmd_list:
+                    run_action: str = self.tools.guard_multiline_input(cmd).strip()
+                    self._env.communicate(
+                        input=run_action,
+                        timeout=max(self.tools.config.execution_timeout, 1800),
+                        check="raise" if self._always_require_zero_exit_code else "ignore",
+                    )
+                    content = self._env.communicate(
+                        input=f"cat {fpath}",
+                        timeout=max(self.tools.config.execution_timeout, 1800),
+                        check="raise" if self._always_require_zero_exit_code else "ignore",
+                    )
+                    if len(content) > 1600:
+                        content = "(Model observation truncated because file content is too long... Only displaying the last 1500 characters...)\n" + content[-1500:]
+                    step.observation += content
+                    
+            else:
+                run_action: str = self.tools.guard_multiline_input(step.action).strip()
+                step.observation = self._env.communicate(
+                    input=run_action,
+                    timeout=max(self.tools.config.execution_timeout, 1800),
+                    check="raise" if self._always_require_zero_exit_code else "ignore",
+                )
             if len(step.observation) > 100000:
                 step.observation = step.observation[:50000] + "\n...... truncated due to laength ......\n" + step.observation[-50000:]
             steps_left = self.model.config.per_instance_call_limit - self.model.stats.api_calls - 1
             if steps_left <= 5:
-                step.observation += f"Note you have only {steps_left} steps left to reach cost limit, please save your answer to {self.target_file} as soon as possible." 
+                step.observation += f"Note you have only {steps_left} steps left to reach cost limit, please save your answer to {self.target_file} with `str_replace_editor create` as soon as possible." 
         except CommandTimeoutError:
             self._n_consecutive_timeouts += 1
             if self._n_consecutive_timeouts >= self.tools.config.max_consecutive_execution_timeouts:

@@ -804,6 +804,246 @@ class DefaultAgent(AbstractAgent):
         self._append_history(history_item)
         return
     
+    def prepare_gt_forward(self):
+        def condense_too_long_P2P(p2p: list) -> list:
+            assert isinstance(p2p, list)
+            if len(p2p) > 1200:
+                self.logger.info("Warning. Ignoring P2P arguments due to limited length.")
+                p2p = list(set([i.split("[")[0].split("(")[0] for i in p2p]))
+            if len(p2p) > 1800:
+                self.logger.info("Warning. Ignoring P2P function name due to limited length.")
+                p2p = list(set(["::".join(i.split("::")[:-1]) if i.count("::") >= 1 else i for i in p2p]))
+            if len(p2p) > 1800:
+                self.logger.info("Warning. Ignoring P2P class name due to limited length.")
+                p2p = list(set([i.split("::")[0] for i in p2p]))
+            return p2p
+
+        gt = self._problem_statement.extra_fields["instance"]
+        for cmd in gt.get("addtional_setup_cmd", []):
+            self._env.communicate(
+                input=cmd,
+                timeout=self.tools.config.execution_timeout,
+                check="raise",
+            )
+        if self.ablation.get("location", False):
+            message = "Your colleague has found the suspicious locations that should be edited to resolve the issue:\n"
+            for k, v in gt["location_content"].items():
+                message += f"\n===========================\n# {k.strip()}:\n{v}\n"
+            message += "\n===========================\n"
+            message += "You must follow your colleague's advice to edit the suggested locations first.\n"
+            message += "You must first inspect and try to edit all of these locations one by one:\n"
+            message += json.dumps(gt["location"], indent = True) + "\n"
+            message += "If you find after editing these locations the reproduce test still fails, you can of course consider other code contexts relevant to the issue description. But you must first try to edit the locations specified by your colleague!"
+            history_item: dict[str, Any] = {
+                "role": "user",
+                "content": message,
+                "agent": self.name,
+                "message_type": "observation",
+            }
+            self._append_history(history_item)
+            self.logger.info(f"\n<<<<<<GT\n{message}\n>>>>>>\n")
+        if self.ablation.get("reproduction", False):
+            if gt.get("before_repo_set_cmd", ""):
+                test_patch_cmd = gt["before_repo_set_cmd"].strip().split("\n")[-1]
+            else:
+                test_patch_cmd = f"""git apply - <<'NEW_PATCH'\n{gt["test_patch"]}\nNEW_PATCH"""
+            for cmd in [
+                'git config --global user.email "example@gmail.com"',
+                'git config --global user.name "example"',
+                test_patch_cmd,
+                "git add .",
+                'git commit -m "apply test patch"',
+            ]:
+                self._env.communicate(
+                    input=cmd,
+                    timeout=self.tools.config.execution_timeout,
+                    check="raise",
+                )
+
+        if self.ablation.get("reproduction", False) and self.ablation.get("regression", False):
+            message = "Your colleague has written the correct reproduction tests in the test folder and has figured out how to run regression tests in the repository.\n"
+            message += "The testcases to reproduce the bugs are:\n"
+            for k, v in gt["F2P_content"].items():
+                message += f"\n===========================\n# {k.strip()}:\n{v}\n"
+            message += "\n===========================\n\n"
+            message += f"The command to run these reproduction testcases is: \n{gt["f2p_cmd"]}\n\n"
+            message += f"The list of reproduction testcases that you must pass: \n{gt["FAIL_TO_PASS"]}\n\n"
+            test_cmd = None
+            write_to_file = " > log.out 2>&1 \n (You need to write test result to file because the test log is very long. Use echo $?, grep, head, tail commands to check the test result.)\n" if len(gt["PASS_TO_PASS"]) > 3000 else ""
+            if "test_cmd" in gt.keys():
+                test_cmd = gt["test_cmd"]
+            elif "test_cmds" in gt.keys():
+                test_cmd = " ;".join(gt["test_cmds"])
+            else:
+                raise KeyError("test cmd not found!")
+            message += f"The command to run regression tests is: \n{test_cmd} {write_to_file}\n\n"
+            if len(gt["PASS_TO_PASS"]) > 512 and (gt.get("INVALID_TESTS", None) is not None):
+                # For swebench-Live instances, whose PASS_TO_PASS list is very long.
+                if len(gt["INVALID_TESTS"]) == 0:
+                    message += "You need to pass all the regression tests.\n\n"
+                else:
+                    message += f"You do not need to pass these invalid regression tests: {gt["INVALID_TESTS"]}. You can ignore them if some of them fail. Except these invalid tests, you need to pass ALL the other regression tests.\n"
+            else:
+                message += f"The list of regression testcases that you must pass: \n{condense_too_long_P2P(gt["PASS_TO_PASS"])}\n\n"
+            message += "As your colleague has written the reproduction tests and found the regression tests for you, you do not need to do this again. After you modified the source codes, please run reproduction and regression tests to validate your fix. You must pass both reproduction and regression tests before you submit."
+            history_item: dict[str, Any] = {
+                "role": "user",
+                "content": message,
+                "agent": self.name,
+                "message_type": "observation",
+            }
+            self.logger.info(f"\n<<<<<<GT\n{message}\n>>>>>>\n")
+            self._append_history(history_item)
+        elif self.ablation.get("regression", False):
+            message = "Your colleague has figured out how to run the original regression tests in this repository.\n"
+            write_to_file = " > log.out 2>&1 \n (You need to write test result to file because the test log is very long. Use echo $?, grep, head, tail commands to check the test result.)\n" if len(gt["PASS_TO_PASS"]) > 3000 else ""
+            test_cmd = None
+            if "test_cmd" in gt.keys():
+                test_cmd = gt["test_cmd"]
+            elif "test_cmds" in gt.keys():
+                test_cmd = " ;".join(gt["test_cmds"])
+            else:
+                raise KeyError("test cmd not found!")
+            message += f"The command to run regression tests is: \n{test_cmd} {write_to_file}\n\n"
+            if len(gt["PASS_TO_PASS"]) > 512 and (gt.get("INVALID_TESTS", None) is not None):
+                # For swebench-Live instances, whose PASS_TO_PASS list is very long.
+                if len(gt["INVALID_TESTS"]) == 0:
+                    message += "You need to pass all the regression tests.\n\n"
+                else:
+                    message += f"You do not need to pass these invalid tests: {gt["INVALID_TESTS"]}. You can ignore them if some of them fail. Except these invalid tests, you need to pass ALL the other regression tests.\n"
+            else:
+                message += f"The list of regression testcases that you must pass: \n{condense_too_long_P2P(gt["PASS_TO_PASS"])}\n\n"
+            message += "As your colleague has found the regression tests for you, you do not need to do this again. After you modified the source codes, please run regression tests to check that your edits have not broken anything."
+            history_item: dict[str, Any] = {
+                "role": "user",
+                "content": message,
+                "agent": self.name,
+                "message_type": "observation",
+            }
+            self.logger.info(f"\n<<<<<<GT\n{message}\n>>>>>>\n")
+            self._append_history(history_item)
+        elif self.ablation.get("reproduction", False):
+            message = "Your colleague has written the correct reproduction tests that can test whether the problem is resolved in the test folder.\n"
+            message += "The testcases to reproduce the problem are:\n"
+            for k, v in gt["F2P_content"].items():
+                message += f"\n===========================\n# {k.strip()}:\n{v}\n"
+            message += "\n===========================\n\n"
+            message += f"The command to run these reproduction testcases is: \n{gt["f2p_cmd"]}\n\n"
+            message += f"The list of reproduction testcases that you must pass: \n{gt["FAIL_TO_PASS"]}\n\n"
+            message += "As your colleague has written the reproduction tests for you, you do not need to do this again. After you modified the source codes, please run reproduction tests to validate your fix. You must pass all the reproduction tests before you submit."
+            history_item: dict[str, Any] = {
+                "role": "user",
+                "content": message,
+                "agent": self.name,
+                "message_type": "observation",
+            }
+            self.logger.info(f"\n<<<<<<GT\n{message}\n>>>>>>\n")
+            self._append_history(history_item)
+        
+        if self.ablation.get("context", False) and gt["error_context"]:
+            message = "Hints: Your colleague has provided the error stack traces from running reproduction testcaces related to this problem.\n"
+            message += "Each layer of trace is in the format of (file path, line number, function name, source code).\n"
+            message += json.dumps(gt["error_context"], indent=True) + "\n"
+            message += "The error stack traces can be some hints to help you locate the locations to be edited, and understand the code contexts which affect the locations to be edited or your edits would affect.\n"
+            history_item: dict[str, Any] = {
+                "role": "user",
+                "content": message,
+                "agent": self.name,
+                "message_type": "observation",
+            }
+            self.logger.info(f"\n<<<<<<GT\n{message}\n>>>>>>\n")
+            self._append_history(history_item)
+
+        if self.ablation.get("api", False) and gt["api"]:
+            message = "Hints: Your colleague has listed the important functions which you may need to use to edit the source code or may help you understand the key locations in the source code.\n"
+            message += 'The function information format is a mapping: Dict [ "the path of the file you need to edit" : List [ "the information of each function you need to use to edit this file" ] ] \n'
+            message += json.dumps(gt["api"], indent=True) + "\n"
+            message += 'Try to use ALL of the function calls listed above to edit the source code in the ways suggested by your colleague.\n'
+            message += "You can go to find the function definition of these functions you need to use to understand these functions better.  If you think the utilities suggested by your colleague are not enough to edit the source code, you can of course find the API / function utilities to help you understand / edit key target locations by yourself.\n"
+            history_item: dict[str, Any] = {
+                "role": "user",
+                "content": message,
+                "agent": self.name,
+                "message_type": "observation",
+            }
+            self.logger.info(f"\n<<<<<<GT\n{message}\n>>>>>>\n")
+            self._append_history(history_item)
+
+        user_requirement = None
+        if self.ablation.get("reproduction", False) and self.ablation.get("regression", False) and self.ablation.get("location", False):
+            user_requirement = ("Following your colleagues' contributions, your next steps should be:\n"
+                       "1) Explore the source codes if you want to understand the contexts of the buggy locations or testcases better. But remember that all the locations that need to edited have been listed above.\n"
+                       "2) Edit all the locations specified by your colleagues to resolve the issue.\n"
+                       "3) Run reproduction and regression tests to validate your fix. If any of the testcases required above fails, go back to explore and edit again.\n"
+                       "4) If you pass both reproduction and regression tests, submit.\n"
+                    )
+        elif self.ablation.get("reproduction", False) and self.ablation.get("location", False):
+            user_requirement = ("Following your colleagues' contributions, your next steps should be:\n"
+                       "1) Explore the source codes if you want to understand the contexts of the buggy locations or testcases better. But remember that all the locations that need to edited have been listed above.\n"
+                       "2) Edit all the locations specified by your colleagues to resolve the issue.\n"
+                       "3) Run reproduction tests to validate your fix. Due to time limit, do not run the regression tests in the repository. If any of the testcases required above fails, go back to explore and edit again.\n"
+                       "4) If you pass all the reproduction tests, submit.\n"
+                    )
+        elif self.ablation.get("regression", False) and self.ablation.get("location", False):
+            user_requirement = ("Following your colleagues' contributions, your next steps should be:\n"
+                       "1) Explore the source codes if you want to understand the contexts of the buggy locations or testcases better. But remember that all the locations that need to edited have been listed above.\n"
+                       "2) Create a script to reproduce the problem and execute it with `python <filename.py>` using the bash tool, to confirm the problem.\n"
+                       "3) Edit all the locations specified by your colleagues to resolve the issue.\n"
+                       "4) Rerun your reproduce script to confirm that the error is fixed. Run the regression tests found by your colleague to check that your edits have not broken anything else. If your reproduce script or any of the regression testcases required above fail, go back to explore and edit again.\n"
+                       "5) If you pass both your reproduce script and all the regression tests required above, submit your answer.\n"
+                    )
+        elif self.ablation.get("reproduction", False) and self.ablation.get("regression", False):
+            user_requirement = ("Following your colleagues' contributions, your next steps should be:\n"
+                       "1) As a first step, it might be a good idea to find and read code relevant to the <pr_description>. \n"
+                       "2) Edit the codes to resolve the issue.\n"
+                       "3) Run reproduction and regression tests to validate your fix. If any of the testcases required above fails, go back to explore and edit again.\n"
+                       "4) If you pass both reproduction and regression tests, submit.\n"
+                    )
+        elif self.ablation.get("location", False):
+            user_requirement = ("Following your colleagues' contributions, your next steps should be:\n"
+                       "1) Explore the source codes if you want to understand the contexts of the buggy locations or testcases better. But remember that you must edit the locations suggested by your colleague first to see if it works!\n"
+                       "2) Create a script to reproduce the problem and execute it with `python <filename.py>` using the bash tool, to confirm the problem.\n"
+                       "3) Edit all the locations specified by your colleagues to resolve the issue.\n"
+                       "4) Run your reproduction script to validate your fix. Due to time limit, do not run the regression tests in the repository. If the reproduction script still fails, go back to explore and edit again.\n"
+                       "5) If you pass your reproduction script, submit.\n"
+                    )
+        elif self.ablation.get("reproduction", False):
+            user_requirement = ("Following your colleagues' contributions, your next steps should be:\n"
+                       "1) As a first step, it might be a good idea to find and read code relevant to the <pr_description>. \n"
+                       "2) Edit the codes to resolve the issue.\n"
+                       "3) Run reproduction tests provided by your colleague to validate your fix. Due to time limit, do not run the regression tests in the repository. If any of the reproduction testcases listed above fails, go back to explore and edit again.\n"
+                       "4) If you pass ALL the reproduction tests, submit.\n"
+                    )
+        elif self.ablation.get("regression", False):
+            user_requirement = """
+      Follow these steps to resolve the issue:
+      1. As a first step, it might be a good idea to find and read code relevant to the <pr_description>.
+      2. Create a script to reproduce the problem and execute it with `python <filename.py>` using the bash tool, to confirm the problem.
+      3. Edit the sourcecode of the repo to resolve the issue.
+      4. Rerun your reproduce script to confirm that the error is fixed. Run the regression tests found by your colleague to check that your edits have not broken anything else. If your reproduce script or any of the regression testcases required above fail, go back to explore and edit again.
+      5. If you pass both your reproduce script and all the regression tests required above, submit your answer.
+"""
+        else:
+            user_requirement = """
+      Follow these steps to resolve the issue:
+      1. As a first step, it might be a good idea to find and read code relevant to the <pr_description>
+      2. Create a script to reproduce the error and execute it with `python <filename.py>` using the bash tool, to confirm the error
+      3. Edit the sourcecode of the repo to resolve the issue
+      4. Rerun your reproduce script and confirm that the error is fixed!
+      5. Think about edgecases and make sure your fix handles them as well
+      Your thinking should be thorough and so it's fine if it's very long.
+"""
+        history_item: dict[str, Any] = {
+            "role": "user",
+            "content": user_requirement,
+            "agent": self.name,
+            "message_type": "observation",
+        }
+        self.logger.info(f"\n<<<<<<USER_REQUIREMENT\n{user_requirement}\n>>>>>>\n")
+        self._append_history(history_item)
+        return
+    
+
     def setup(
         self,
         env: SWEEnv,
@@ -854,7 +1094,10 @@ class DefaultAgent(AbstractAgent):
             self.logger.warning(f"get_state timed out during setup: {e}. Using empty state.")
             state = {}
         self.add_instance_template_to_history(state=state)
-        self.prepare_gt()
+        if self.ablation.get("solve", False):
+            self.prepare_gt_forward()
+        else:
+            self.prepare_gt()
         self._chook.on_setup_done()
 
     def add_system_message_to_history(self) -> None:

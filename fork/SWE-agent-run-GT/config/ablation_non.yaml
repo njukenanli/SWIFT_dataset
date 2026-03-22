@@ -6,7 +6,7 @@ agent:
     name: 'gpt-5-20250807'
     per_instance_cost_limit: 0
     total_cost_limit: 0
-    per_instance_call_limit: 120
+    per_instance_call_limit: 100
     max_input_tokens: 0
     temperature: 0.0
     top_p: 1.0

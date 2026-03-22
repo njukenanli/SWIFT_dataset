@@ -1,5 +1,6 @@
 import pytest
 import yaml
+from shlex import quote, split
 from swerex.exceptions import SwerexException
 from swerex.runtime.abstract import Action, BashObservation, Observation
 from swerex.runtime.dummy import DummyRuntime
@@ -260,3 +261,28 @@ def test_function_calling(dummy_env: SWEEnv, function_calling_agent: DefaultAgen
     assert not r.done, "Expected not done, because we haven't submitted yet"
     assert r.action.strip() == "ls", "Expected the tool call to be executed"
     assert "file1 file2" in r.observation, "Expected the tool call to return the output of the command"
+
+
+def test_cut_long_create_preserves_quoting(default_agent: DefaultAgent):
+    content = (
+        "print()\n"
+        "s=\"'\"\n"
+        "s='\"'\n"
+        "\"\"\"\n"
+        "'''mixed''\"\" quotes\n"
+    ) * 40
+    cmd = f"str_replace_editor create /testbed/reproduction_test.go --file_text {quote(content)}"
+    path, cmd_list = default_agent._cut_long_create(cmd)
+
+    assert path == "/testbed/reproduction_test.go"
+    assert len(cmd_list) > 1
+
+    recovered_chunks = []
+    for i, sub_cmd in enumerate(cmd_list):
+        tokens = split(sub_cmd)
+        assert tokens[0] == "str_replace_editor"
+        assert tokens[1] == ("create" if i == 0 else "append")
+        assert "--file_text" in tokens
+        recovered_chunks.append(tokens[tokens.index("--file_text") + 1])
+
+    assert "".join(recovered_chunks) == content

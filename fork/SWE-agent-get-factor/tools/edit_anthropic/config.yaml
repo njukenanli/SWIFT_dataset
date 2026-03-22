@@ -21,7 +21,7 @@ tools:
         type: string
         description: "The commands to run. Allowed options are: `view`, `create`, `str_replace`, `insert`, `undo_edit`."
         required: true
-        enum: ["view", "create", "str_replace", "insert", "undo_edit"]
+        enum: ["view", "str_replace", "create", "insert", "undo_edit"]
       - name: path
         type: string
         description: "Absolute path to file or directory, e.g. `/testbed/file.py` or `/testbed`."

@@ -3,7 +3,7 @@ import argparse
 
 base_dir = "/home/v-kenanli/workspace/ablation/fork/SWE-agent/trajectories/v-kenanli/ablation_all__gpt-5-20250807__t-0.00__p-1.00__c-0.00___swe_bench_/home/v-kenanli/workspace/ablation/data/pro/pyt/subset/overlap.jsonl_dev"
 parser = argparse.ArgumentParser()
-parser.add_argument("base", type=str)
+parser.add_argument("--base", type=str)
 args = parser.parse_args()
 if hasattr(args, "base") and args.base is not None:
     base_dir = args.base
